@@ -1,6 +1,3 @@
-import abc
-
-
 def _pixel_str(value):
     r, g, b = value
     if r >= 245 and g <= 10 and b <= 10:
@@ -15,7 +12,7 @@ def _pixel_str(value):
         return 'o'
 
 
-class Display(abc.ABC):
+class Display:
     def __init__(self, height: int, width: int):
         self.height = height
         self.width = width
@@ -52,7 +49,10 @@ try:
 
         def __setitem__(self, indices, value):
             x, y = indices
-            self._leds[x * self.width + y] = value
+            try:
+                self._leds[y * self.width + ((self.width - 1 - x) if y % 2 == 0 else x)] = value
+            except IndexError:
+                print(f'WARNING: Out of bounds display access: {x}, {y}')
 
         def write(self):
             self._leds.write()
