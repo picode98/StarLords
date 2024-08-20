@@ -14,7 +14,7 @@ else:
     game_disp = display.NeopixelDisplay(machine.Pin(16), DISPLAY_SIZE[0], DISPLAY_SIZE[1])
 
 game = starlords.StarlordsGame(game_disp)
-game._state.ball_velocity = (5.01, 1.0)
+game._state.ball_velocity = starlords.Vector2(5.01, 1.0)
 
 target_ticks = 1000000000 // 10
 frame = 0
