@@ -16,35 +16,35 @@ control box (audio volume control towers, audio volume sub woofers, bigpixel dis
 """
 5 volt level shifted outputs
 """
-LED_BIGPIXEL_PIN = const(17)
-LED_C1_PIN = const(7)
-LED_C2_PIN = const(16)
-LED_C3_PIN = const(19)
-LED_C4_PIN = const(26)
+LED_BIGPIXEL_PIN = 17
+LED_C1_PIN = 7
+LED_C2_PIN = 16
+LED_C3_PIN = 19
+LED_C4_PIN = 26
 
 """
 3.3 volt sensor inputs
 """
-BUTTON_C1_PIN = const(8)
-BUTTON_C2_PIN = const(6)
-BUTTON_C3_PIN = const(20)
-BUTTON_C4_PIN = const(13)
-BUTTON_C5_PIN = const(2)
+BUTTON_C1_PIN = 8
+BUTTON_C2_PIN = 6
+BUTTON_C3_PIN = 20
+BUTTON_C4_PIN = 13
+BUTTON_C5_PIN = 2
 
-CLICK_C1_PIN = const(11)
-CLICK_C2_PIN = const(5)
-CLICK_C3_PIN = const(12)
-CLICK_C4_PIN = const(21)
-CLICK_C5_PIN = const(3)
+CLICK_C1_PIN = 11
+CLICK_C2_PIN = 5
+CLICK_C3_PIN = 12
+CLICK_C4_PIN = 21
+CLICK_C5_PIN = 3
 
-DIR_C1_PIN = const(9)
-DIR_C2_PIN = const(25)
-DIR_C3_PIN = const(0)
-DIR_C4_PIN = const(27)
-DIR_C5_PIN = const(23)
+DIR_C1_PIN = 9
+DIR_C2_PIN = 25
+DIR_C3_PIN = 0
+DIR_C4_PIN = 27
+DIR_C5_PIN = 23
 
-PRESENCE_C1_PIN = const(10)
-PRESENCE_C2_PIN = const(24)
-PRESENCE_C3_PIN = const(1)
-PRESENCE_C4_PIN = const(4)
+PRESENCE_C1_PIN = 10
+PRESENCE_C2_PIN = 24
+PRESENCE_C3_PIN = 1
+PRESENCE_C4_PIN = 4
 
