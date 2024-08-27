@@ -1,7 +1,9 @@
 import math
 
-from display import Display
+from hardware.display import Display
 
+def _add_colors(*args):
+    return tuple(min(sum(arg[i] for arg in args), 255) for i in range(len(args[0])))
 
 class Vector2:
     def __init__(self, x: float, y: float):
@@ -197,25 +199,28 @@ class StarlordsGame:
 
     def render(self):
         """ draw self._state to self._display """
-        for x in range(self._display.width):
-            for y in range(self._display.height):
-                self._display[x, y] = (0, 0, 0)
+        display_buf = [[(0, 0, 0) for _ in range(self._display.width)] for _ in range(self._display.height)] 
 
         for brick_list in self._state.castle_bricks:
             for brick_pos in brick_list:
-                self._display[round(brick_pos.x), round(brick_pos.y)] = StarlordsGame.BRICK_COLOR
+                display_buf[round(brick_pos.x)][round(brick_pos.y)] = StarlordsGame.BRICK_COLOR
 
         for position, radius, brightness in self._state.explosions:
-            for block_x in range(max(int(position.x - radius), 0), min(math.ceil(position.x + radius) + 1, self._display.width - 1)):
-                for block_y in range(max(int(position.y - radius), 0), min(math.ceil(position.y + radius) + 1, self._display.height - 1)):
+            for block_x in range(max(int(position.x - radius), 0), min(math.ceil(position.x + radius), self._display.width - 1) + 1):
+                for block_y in range(max(int(position.y - radius), 0), min(math.ceil(position.y + radius), self._display.height - 1) + 1):
                     if (position.x - (block_x + 0.5)) ** 2 + (position.y - (block_y + 0.5)) ** 2 <= radius:
-                        self._display[block_x, block_y] = (round(StarlordsGame.EXPLOSION_COLOR[0] * brightness),
+                        display_buf[block_x][block_y] = _add_colors(display_buf[block_x][block_y], (round(StarlordsGame.EXPLOSION_COLOR[0] * brightness),
                                                            round(StarlordsGame.EXPLOSION_COLOR[1] * brightness),
-                                                           round(StarlordsGame.EXPLOSION_COLOR[2] * brightness))
+                                                           round(StarlordsGame.EXPLOSION_COLOR[2] * brightness)))
 
         for shield_pos in self._state.shield_positions:
-            self._display[round(shield_pos.x), round(shield_pos.y)] = StarlordsGame.SHIELD_COLOR
+            display_buf[round(shield_pos.x)][round(shield_pos.y)] = _add_colors(display_buf[round(shield_pos.x)][round(shield_pos.y)], StarlordsGame.SHIELD_COLOR)
 
         # print(f'Position: {self._state.ball_position} Velocity: {self._state.ball_velocity}')
-        self._display[round(self._state.ball_position.x - StarlordsGame.BALL_SIZE / 2.0), round(self._state.ball_position.y - StarlordsGame.BALL_SIZE / 2.0)] = StarlordsGame.BALL_COLOR
+        ball_draw_x, ball_draw_y = round(self._state.ball_position.x - StarlordsGame.BALL_SIZE / 2.0), round(self._state.ball_position.y - StarlordsGame.BALL_SIZE / 2.0)
+        display_buf[ball_draw_x][ball_draw_y] = _add_colors(display_buf[ball_draw_x][ball_draw_y], StarlordsGame.BALL_COLOR)
+        
+        for y in range(self._display.height):
+            for x in range(self._display.width):
+                self._display[x, y] = display_buf[x][y]
         self._display.write()

@@ -39,13 +39,25 @@ class PrintDisplay(Display):
 
 
 try:
-    import machine
+    try:
+        import machine
+
+        PinType = machine.Pin
+    except ImportError:
+        import board
+
+        PinType = type(board.D0)
+
     import neopixel
 
+
     class NeopixelDisplay(Display):
-        def __init__(self, pin: machine.Pin, height: int, width: int):
+        def __init__(self, pin: PinType, height: int, width: int):
             super().__init__(height, width)
-            self._leds = neopixel.NeoPixel(pin, height * width)
+            try:
+                self._leds = neopixel.NeoPixel(pin, height * width, auto_write=False)
+            except TypeError:
+                self._leds = neopixel.NeoPixel(pin, height * width)
 
         def __setitem__(self, indices, value):
             x, y = indices

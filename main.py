@@ -1,6 +1,6 @@
 import time
 
-import display
+from hardware import display
 import starlords
 
 sleep = time.sleep_us if hasattr(time, 'sleep_us') else lambda us: time.sleep(us / 1e6)
