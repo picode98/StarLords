@@ -1,6 +1,8 @@
 import math
+from typing import List
 
 from hardware.display import Display
+from hardware.player_station import PlayerStation
 
 def _add_colors(*args):
     return tuple(min(sum(arg[i] for arg in args), 255) for i in range(len(args[0])))
@@ -62,17 +64,72 @@ class Vector2:
 v2 = Vector2
 
 
+def _circle_rectangle_collision(circle_pos: v2, circle_radius: float, rectangle_pos: v2, rectangle_size: v2):
+    corners = [rectangle_pos, v2(rectangle_pos.x + rectangle_size.x, rectangle_pos.y),
+               rectangle_pos + rectangle_size,
+               v2(rectangle_pos.x, rectangle_pos.y + rectangle_size.y)]
+    closest_corner, dist = min(((corner, (corner - circle_pos).length2())
+                                for corner in corners), key=lambda x: x[1])
+    dist = math.sqrt(dist)
+
+    if dist <= circle_radius:
+        abs_intersect_x = math.sqrt(
+            circle_radius ** 2 - (closest_corner.y - circle_pos.y) ** 2)
+        abs_intersect_y = math.sqrt(
+            circle_radius ** 2 - (closest_corner.x - circle_pos.x) ** 2)
+        ix_point = v2(circle_pos.x + (
+            -abs_intersect_x if closest_corner.x < circle_pos.x else abs_intersect_x), closest_corner.y)
+        iy_point = v2(closest_corner.x, circle_pos.y + (
+            -abs_intersect_y if closest_corner.y < circle_pos.y else abs_intersect_y))
+
+        normal_vector = circle_pos - (ix_point + iy_point) / 2.0
+        # normal_vector = (self._state.ball_position[0] - closest_corner[0],
+        #                  self._state.ball_position[1] - closest_corner[1])
+        unit_normal_vector: Vector2 = normal_vector / normal_vector.length()
+        return unit_normal_vector
+    elif (circle_pos.x + circle_radius >= rectangle_pos.x and
+          circle_pos.x - circle_radius <= rectangle_pos.x + rectangle_size.x and
+          circle_pos.y >= rectangle_pos.y and
+          circle_pos.y <= rectangle_pos.y + rectangle_size.y
+    ) or (
+            circle_pos.x >= rectangle_pos.x and
+            circle_pos.x <= rectangle_pos.x + rectangle_size.x and
+            circle_pos.y + circle_radius >= rectangle_pos.y and
+            circle_pos.y - circle_radius <= rectangle_pos.y + rectangle_size.y
+    ):
+        delta = circle_pos - (rectangle_pos + rectangle_size / 2.0)
+
+        if abs(delta.x) >= abs(delta.y):
+            normal_vector = v2(-1.0 if delta.x < 0.0 else 1.0, 0.0)
+        else:
+            normal_vector = v2(0.0, -1.0 if delta.y < 0.0 else 1.0)
+
+        return normal_vector
+    else:
+        return None
+
+
+
 class GameState:
     """ information about which bricks are broken, projectile position, etc. """
     def __init__(self, field_size: Vector2):
         w, h = field_size.x, field_size.y
         self.field_size: Vector2 = field_size
+        self.active_players = {1, 2, 3, 4}
         self.ball_position = v2(w / 2.0, h / 2.0)
         self.ball_velocity = v2(0.0, 0.0)
+        self.ball_captured_by = None
+        self.ball_releasing_from = None
+        self.ball_capture_speed = None
         self.castle_bricks = [[v2(3.0, 0.0), v2(3.0, 1.0), v2(3.0, 2.0), v2(3.0, 3.0), v2(2.0, 3.0), v2(1.0, 3.0), v2(0.0, 3.0)],
                               [v2(w - 4.0, 0.0), v2(w - 4.0, 1.0), v2(w - 4.0, 2.0), v2(w - 4.0, 3.0), v2(w - 3.0, 3.0), v2(w - 2.0, 3.0), v2(w - 1.0, 3.0)],
                               [v2(w - 4.0, h - 1.0), v2(w - 4.0, h - 2.0), v2(w - 4.0, h - 3.0), v2(w - 4.0, h - 4.0), v2(w - 3.0, h - 4.0), v2(w - 2.0, h - 4.0), v2(w - 1.0, h - 4.0)],
                               [v2(3.0, h - 1.0), v2(3.0, h - 2.0), v2(3.0, h - 3.0), v2(3.0, h - 4.0), v2(2.0, h - 4.0), v2(1.0, h - 4.0), v2(0.0, h - 4.0)]
+        ]
+        self.shield_position_maps = [[v2(5.0, 0.0), v2(5.0, 1.0), v2(5.0, 2.0), v2(5.0, 3.0), v2(5.0, 4.0), v2(5.0, 5.0), v2(4.0, 5.0), v2(3.0, 5.0), v2(2.0, 5.0), v2(1.0, 5.0), v2(0.0, 5.0)],
+                                     [v2(w - 6.0, 0.0), v2(w - 6.0, 1.0), v2(w - 6.0, 2.0), v2(w - 6.0, 3.0), v2(w - 6.0, 4.0), v2(w - 6.0, 5.0), v2(w - 5.0, 5.0), v2(w - 4.0, 5.0), v2(w - 3.0, 5.0), v2(w - 2.0, 5.0), v2(w - 1.0, 5.0)],
+                                     [v2(w - 6.0, h - 1.0), v2(w - 6.0, h - 2.0), v2(w - 6.0, h - 3.0), v2(w - 6.0, h - 4.0), v2(w - 6.0, h - 5.0), v2(w - 6.0, h - 6.0), v2(w - 5.0, h - 6.0), v2(w - 4.0, h - 6.0), v2(w - 3.0, h - 6.0), v2(w - 2.0, h - 6.0), v2(w - 1.0, h - 6.0)],
+                                     [v2(5.0, h - 1.0), v2(5.0, h - 2.0), v2(5.0, h - 3.0), v2(5.0, h - 4.0), v2(5.0, h - 5.0), v2(5.0, h - 6.0), v2(4.0, h - 6.0), v2(3.0, h - 6.0), v2(2.0, h - 6.0), v2(1.0, h - 6.0), v2(0.0, h - 6.0)]
         ]
         self.shield_positions = [v2(5.0, 5.0), v2(w - 6.0, 5.0), v2(w - 6.0, h - 6.0), v2(5.0, h - 6.0)]
         self.explosions = []
@@ -81,23 +138,29 @@ class GameState:
 class BallColliderType:
     WALL = 0
     CASTLE_BRICK = 1
-    POWER_CORE = 2
+    SHIELD = 2
+    POWER_CORE = 3
 
 
 class StarlordsGame:
     BALL_COLOR = (50, 50, 50)
     BRICK_COLOR = (0, 0, 50)
     SHIELD_COLOR = (50, 0, 0)
+    POWER_CORE_COLOR = (30, 50, 30)
     EXPLOSION_COLOR = (50, 50, 50)
     BRICK_SIZE = v2(1.0, 1.0)
+    SHIELD_SIZE = v2(1.0, 1.0)
     BALL_SIZE = 1.0
     MAX_DELTA = 0.3
     MINIMUM_EXPLOSION_BRIGHTNESS = 0.05
     EXPLOSION_SHOCKWAVE_VELOCITY = 8.0
 
-    def __init__(self, display: Display):
+    def __init__(self, display: Display, player_stations: List[PlayerStation]):
         self._state = GameState(v2(display.width, display.height))
         self._display = display
+
+        assert len(player_stations) == 4
+        self._player_stations = player_stations
 
     def _get_ball_collisions(self):
         colliders = []
@@ -115,42 +178,14 @@ class StarlordsGame:
 
         for player_index, brick_list in enumerate(self._state.castle_bricks):
             for brick_index, brick_pos in enumerate(brick_list):
-                corners = [brick_pos, v2(brick_pos.x + StarlordsGame.BRICK_SIZE.x, brick_pos.y),
-                           brick_pos + StarlordsGame.BRICK_SIZE,
-                           v2(brick_pos.x, brick_pos.y + StarlordsGame.BRICK_SIZE.y)]
-                closest_corner, dist = min(((corner, (corner - self._state.ball_position).length2())
-                    for corner in corners), key=lambda x: x[1])
-                dist = math.sqrt(dist)
+                collision_normal_vector = _circle_rectangle_collision(self._state.ball_position, self.BALL_SIZE / 2.0, brick_pos, self.BRICK_SIZE)
+                if collision_normal_vector is not None:
+                    colliders.append((BallColliderType.CASTLE_BRICK, collision_normal_vector, player_index, brick_index))
 
-                if dist <= self.BALL_SIZE / 2.0:
-                    abs_intersect_x = math.sqrt((StarlordsGame.BALL_SIZE / 2.0) ** 2 - (closest_corner.y - self._state.ball_position.y) ** 2)
-                    abs_intersect_y = math.sqrt((StarlordsGame.BALL_SIZE / 2.0) ** 2 - (closest_corner.x - self._state.ball_position.x) ** 2)
-                    ix_point = v2(self._state.ball_position.x + (-abs_intersect_x if closest_corner.x < self._state.ball_position.x else abs_intersect_x), closest_corner.y)
-                    iy_point = v2(closest_corner.x, self._state.ball_position.y + (-abs_intersect_y if closest_corner.y < self._state.ball_position.y else abs_intersect_y))
-
-                    normal_vector = self._state.ball_position - (ix_point + iy_point) / 2.0
-                    # normal_vector = (self._state.ball_position[0] - closest_corner[0],
-                    #                  self._state.ball_position[1] - closest_corner[1])
-                    unit_normal_vector: Vector2 = normal_vector / normal_vector.length()
-                    colliders.append((BallColliderType.CASTLE_BRICK, unit_normal_vector, player_index, brick_index))
-                elif (self._state.ball_position.x + StarlordsGame.BALL_SIZE / 2.0 >= brick_pos.x and
-                         self._state.ball_position.x - StarlordsGame.BALL_SIZE / 2.0 <= brick_pos.x + StarlordsGame.BRICK_SIZE.x and
-                         self._state.ball_position.y >= brick_pos.y and
-                         self._state.ball_position.y <= brick_pos.y + StarlordsGame.BRICK_SIZE.y
-                    ) or (
-                        self._state.ball_position.x >= brick_pos.x and
-                        self._state.ball_position.x <= brick_pos.x + StarlordsGame.BRICK_SIZE.x and
-                        self._state.ball_position.y + StarlordsGame.BALL_SIZE / 2.0 >= brick_pos.y and
-                        self._state.ball_position.y - StarlordsGame.BALL_SIZE / 2.0 <= brick_pos.y + StarlordsGame.BRICK_SIZE.y
-                    ):
-                    delta = self._state.ball_position - (brick_pos + StarlordsGame.BRICK_SIZE / 2.0)
-
-                    if abs(delta.x) >= abs(delta.y):
-                        normal_vector = v2(-1.0 if delta.x < 0.0 else 1.0, 0.0)
-                    else:
-                        normal_vector = v2(0.0, -1.0 if delta.y < 0.0 else 1.0)
-
-                    colliders.append((BallColliderType.CASTLE_BRICK, normal_vector, player_index, brick_index))
+        for player_index, shield_pos in enumerate(self._state.shield_positions):
+            collision_normal_vector = _circle_rectangle_collision(self._state.ball_position, self.BALL_SIZE / 2.0, shield_pos, self.BRICK_SIZE)
+            if collision_normal_vector is not None:
+                colliders.append((BallColliderType.SHIELD, collision_normal_vector, player_index, None))
 
         return colliders
 
@@ -159,6 +194,8 @@ class StarlordsGame:
         mag_delta_sqr = (self._state.ball_velocity * time_delta).length2()
         if mag_delta_sqr >= StarlordsGame.MAX_DELTA ** 2:
             time_delta /= (mag_delta_sqr / (StarlordsGame.MAX_DELTA ** 2))
+
+        self._state.shield_positions = [map[station.get_shield_pos()] for map, station in zip(self._state.shield_position_maps, self._player_stations)]
 
         radius_delta = StarlordsGame.EXPLOSION_SHOCKWAVE_VELOCITY * time_delta
         new_explosions = []
@@ -170,21 +207,45 @@ class StarlordsGame:
         self._state.explosions = new_explosions
 
         collisions = self._get_ball_collisions()
-        avg_normal_vector = sum((normal_vector for _, normal_vector, _, _ in collisions), v2(0.0, 0.0))
+        filtered_collisions = [collision for collision in collisions if collision[0] != BallColliderType.SHIELD or collision[2] != self._state.ball_releasing_from]
+
+        if len(filtered_collisions) == len(collisions):
+            self._state.ball_releasing_from = None
         # for _, normal_vector, _, _ in collisions:
         #     avg_normal_vector = (avg_normal_vector[0] + normal_vector[0], avg_normal_vector[1] + normal_vector[1])
 
-        if len(collisions) > 0:
+        if self._state.ball_captured_by is not None:
+            self._state.ball_position = self._state.shield_positions[self._state.ball_captured_by] + v2(self.BALL_SIZE / 2, self.BALL_SIZE / 2)
+
+            if self._player_stations[self._state.ball_captured_by].get_button_pressed():
+                self._state.ball_velocity = v2(0.0, 0.0)
+            else:
+                corner_position = [v2(0.0, 0.0), v2(self._display.width, 0.0), v2(self._display.width, self._display.height),
+                               v2(0.0, self._display.height)][self._state.ball_captured_by]
+
+                new_velocity = self._state.shield_positions[self._state.ball_captured_by] - corner_position
+                scaled_new_velocity = new_velocity * (self._state.ball_capture_speed / new_velocity.length())
+
+                self._state.ball_velocity = scaled_new_velocity
+                self._state.ball_releasing_from = self._state.ball_captured_by
+                self._state.ball_captured_by = None
+                self._state.ball_capture_speed = None
+        elif len(filtered_collisions) > 0:
             brick_removals = set()
-            for coll_type, normal_vector, player_index, brick_index in collisions:
+            for coll_type, normal_vector, player_index, brick_index in filtered_collisions:
                 if coll_type == BallColliderType.CASTLE_BRICK:
                     brick_pos = self._state.castle_bricks[player_index][brick_index]
                     brick_removals.add((player_index, brick_index))
                     self._state.explosions.append((brick_pos + StarlordsGame.BRICK_SIZE / 2, 1.0, 5.0))
+                elif coll_type == BallColliderType.SHIELD:
+                    if self._player_stations[player_index].get_button_pressed():
+                        self._state.ball_captured_by = player_index
+                        self._state.ball_capture_speed = self._state.ball_velocity.length()
 
             self._state.castle_bricks = [[brick_pos for brick_index, brick_pos in enumerate(brick_list) if not (player_index, brick_index) in brick_removals]
                                          for player_index, brick_list in enumerate(self._state.castle_bricks)]
 
+            avg_normal_vector = sum((normal_vector for _, normal_vector, _, _ in filtered_collisions), v2(0.0, 0.0))
             avg_normal_vector = avg_normal_vector / avg_normal_vector.length()
 
             # for coll_type, normal_vector, player_index, brick_index in self._get_ball_collisions():
@@ -215,6 +276,10 @@ class StarlordsGame:
 
         for shield_pos in self._state.shield_positions:
             display_buf[round(shield_pos.x)][round(shield_pos.y)] = _add_colors(display_buf[round(shield_pos.x)][round(shield_pos.y)], StarlordsGame.SHIELD_COLOR)
+
+        for player_index in self._state.active_players:
+            x, y = [(1, 1), (self._state.field_size.x - 2, 1), (self._state.field_size.x - 2, self._state.field_size.y - 2), (1, self._state.field_size.y - 2)][player_index - 1]
+            display_buf[x][y] = _add_colors(display_buf[x][y], self.POWER_CORE_COLOR)
 
         # print(f'Position: {self._state.ball_position} Velocity: {self._state.ball_velocity}')
         ball_draw_x, ball_draw_y = round(self._state.ball_position.x - StarlordsGame.BALL_SIZE / 2.0), round(self._state.ball_position.y - StarlordsGame.BALL_SIZE / 2.0)

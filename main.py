@@ -1,6 +1,6 @@
 import time
 
-from hardware import display
+from hardware import display, player_station
 import starlords
 
 sleep = time.sleep_us if hasattr(time, 'sleep_us') else lambda us: time.sleep(us / 1e6)
@@ -10,10 +10,16 @@ DISPLAY_SIZE = (16, 16)
 if display.NeopixelDisplay is None:
     game_disp = display.PrintDisplay(DISPLAY_SIZE[0], DISPLAY_SIZE[1])
 else:
-    import machine
-    game_disp = display.NeopixelDisplay(machine.Pin(16), DISPLAY_SIZE[0], DISPLAY_SIZE[1])
+    import board
+    game_disp = display.NeopixelDisplay(board.D18, DISPLAY_SIZE[0], DISPLAY_SIZE[1])
 
-game = starlords.StarlordsGame(game_disp)
+p2_station, p3_station, p4_station = player_station.FilePlayerStation('./p2_station.txt'), player_station.FilePlayerStation('./p3_station.txt'), player_station.FilePlayerStation('./p4_station.txt')
+if player_station.IOPlayerStation is None:
+    p1_station = player_station.FilePlayerStation('./p1_station.txt')
+else:
+    p1_station = player_station.IOPlayerStation(board.D17, board.D27, board.D22, 0, 10)
+
+game = starlords.StarlordsGame(game_disp, [p1_station, p2_station, p3_station, p4_station])
 game._state.ball_velocity = starlords.Vector2(5.01, 1.0)
 
 target_ticks = 1000000000 // 10
