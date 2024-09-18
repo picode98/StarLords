@@ -3,6 +3,7 @@ from typing import List
 
 from hardware.display import Display
 from hardware.player_station import PlayerStation
+from hardware.sound import SamplePlayer, GameSample
 
 def _add_colors(*args):
     return tuple(min(sum(arg[i] for arg in args), 255) for i in range(len(args[0])))
@@ -115,6 +116,7 @@ class GameState:
     def __init__(self, field_size: Vector2):
         w, h = field_size.x, field_size.y
         self.field_size: Vector2 = field_size
+        self.ready_players = set()
         self.active_players = {0, 1, 2, 3}
         self.ball_position = v2(w / 2.0, h / 2.0)
         self.ball_velocity = v2(0.0, 0.0)
@@ -134,6 +136,8 @@ class GameState:
         self.shield_positions = [v2(5.0, 5.0), v2(w - 6.0, 5.0), v2(w - 6.0, h - 6.0), v2(5.0, h - 6.0)]
         self.power_core_positions = [v2(1, 1), v2(w - 2, 1), v2(w - 2, h - 2), v2(1, h - 2)]
         self.explosions = []
+        self.game_started = False
+        self.game_start_time_remaining = None
         self.game_complete = False
 
 
@@ -143,6 +147,56 @@ class BallColliderType:
     SHIELD = 2
     POWER_CORE = 3
 
+COUNTDOWN_DIGITS = [
+'''
+  -
+ --
+  -
+  -
+  -
+  -
+ ---
+''',
+'''
+---- 
+    -
+    -
+ ---
+-
+-
+ ----
+''',
+'''
+-----
+    -
+    -
+ ----
+    -
+    -
+-----
+''',
+'''
+-   -
+-   -
+-   -
+ ----
+    -
+    -
+    -
+''',
+'''
+-----
+-
+-    
+-----
+    -
+-   -
+ ---  
+'''
+]
+COUNTDOWN_DIGITS = [[[char != ' ' for char in line] for line in digit.strip('\n').split('\n')] for digit in COUNTDOWN_DIGITS]
+
+
 
 class StarlordsGame:
     BALL_COLOR = (50, 50, 50)
@@ -151,6 +205,7 @@ class StarlordsGame:
     WINNER_BRICK_COLOR = (int(round(0xd5 * 0.2)), int(round(0x8f * 0.2)), 0)
     POWER_CORE_COLOR = (30, 50, 30)
     EXPLOSION_COLOR = (50, 50, 50)
+    COUNTDOWN_DIGIT_COLOR = (50, 50, 50)
     BRICK_SIZE = v2(1.0, 1.0)
     SHIELD_SIZE = v2(1.0, 1.0)
     POWER_CORE_SIZE = v2(1.0, 1.0)
@@ -158,10 +213,16 @@ class StarlordsGame:
     MAX_DELTA = 0.3
     MINIMUM_EXPLOSION_BRIGHTNESS = 0.05
     EXPLOSION_SHOCKWAVE_VELOCITY = 8.0
+    START_COUNTDOWN_LENGTH = 12.0
 
-    def __init__(self, display: Display, player_stations: List[PlayerStation]):
+    def __init__(self, display: Display, player_stations: List[PlayerStation], sample_player: SamplePlayer):
         self._state = GameState(v2(display.width, display.height))
+        self._ready_players_since_last_render = []
+        self._wall_bounce_since_last_render = False
+        self._brick_bounce_since_last_render = False
+        self._player_eliminated_since_last_render = False
         self._display = display
+        self._sample_player = sample_player
 
         assert len(player_stations) == 4
         self._player_stations = player_stations
@@ -216,7 +277,21 @@ class StarlordsGame:
 
         self._state.explosions = new_explosions
 
-        if not self._state.game_complete:
+
+        if self._state.game_start_time_remaining is not None:
+            self._state.game_start_time_remaining -= time_delta
+            if self._state.game_start_time_remaining <= 0.0:
+                self._state.game_start_time_remaining = None
+                self._state.game_started = True
+        elif not self._state.game_started:
+            for player_index, player_station in enumerate(self._player_stations):
+                if player_station.get_button_pressed() and player_index not in self._state.ready_players:
+                    self._state.ready_players.add(player_index)
+                    self._ready_players_since_last_render.append(player_index)
+
+            if len(self._state.ready_players) == len(self._player_stations):
+                self._state.game_start_time_remaining = self.START_COUNTDOWN_LENGTH
+        elif not self._state.game_complete:
             collisions = self._get_ball_collisions()
             filtered_collisions = [collision for collision in collisions if collision[0] != BallColliderType.SHIELD or collision[2] != self._state.ball_releasing_from]
 
@@ -244,10 +319,13 @@ class StarlordsGame:
             elif len(filtered_collisions) > 0:
                 brick_removals = set()
                 for coll_type, normal_vector, player_index, brick_index in filtered_collisions:
-                    if coll_type == BallColliderType.CASTLE_BRICK:
+                    if coll_type == BallColliderType.WALL:
+                        self._wall_bounce_since_last_render = True
+                    elif coll_type == BallColliderType.CASTLE_BRICK:
                         brick_pos = self._state.castle_bricks[player_index][brick_index]
                         brick_removals.add((player_index, brick_index))
                         self._state.explosions.append((brick_pos + StarlordsGame.BRICK_SIZE / 2, 1.0, 5.0))
+                        self._brick_bounce_since_last_render = True
                     elif coll_type == BallColliderType.SHIELD:
                         if self._player_stations[player_index].get_button_pressed():
                             self._state.ball_captured_by = player_index
@@ -255,6 +333,7 @@ class StarlordsGame:
                     elif coll_type == BallColliderType.POWER_CORE:
                         self._state.explosions.append((self._state.power_core_positions[player_index] + StarlordsGame.POWER_CORE_SIZE / 2, 1.0, 100.0))
                         self._state.active_players.remove(player_index)
+                        self._player_eliminated_since_last_render = True
 
                         if len(self._state.active_players) == 1:
                             self._state.game_complete = True
@@ -277,9 +356,18 @@ class StarlordsGame:
 
     def render(self):
         """ draw self._state to self._display """
-        display_buf = [[(0, 0, 0) for _ in range(self._display.width)] for _ in range(self._display.height)]
+        display_buf = [[(0, 0, 0) for _ in range(self._display.height)] for _ in range(self._display.width)]
 
-        for player_index in self._state.active_players:
+        if self._state.game_start_time_remaining is not None and int(self._state.game_start_time_remaining) < len(COUNTDOWN_DIGITS):
+            digit = COUNTDOWN_DIGITS[int(self._state.game_start_time_remaining)]
+            center_pos_x = (self._display.width - len(digit)) // 2
+            center_pos_y = (self._display.height - max(len(line) for line in digit)) // 2
+            for y, line in enumerate(digit):
+                for x, char in enumerate(line):
+                    if char:
+                        display_buf[center_pos_x + x][center_pos_y + y] = self.COUNTDOWN_DIGIT_COLOR
+
+        for player_index in (self._state.active_players if self._state.game_started else self._state.ready_players):
             brick_list = self._state.castle_bricks[player_index]
             for brick_pos in brick_list:
                 display_buf[round(brick_pos.x)][round(brick_pos.y)] = StarlordsGame.WINNER_BRICK_COLOR if self._state.game_complete else StarlordsGame.BRICK_COLOR
@@ -299,7 +387,7 @@ class StarlordsGame:
                                                            round(StarlordsGame.EXPLOSION_COLOR[2] * brightness)))
 
         # print(f'Position: {self._state.ball_position} Velocity: {self._state.ball_velocity}')
-        if not self._state.game_complete:
+        if self._state.game_started and not self._state.game_complete:
             ball_draw_x, ball_draw_y = round(self._state.ball_position.x - StarlordsGame.BALL_SIZE / 2.0), round(self._state.ball_position.y - StarlordsGame.BALL_SIZE / 2.0)
             display_buf[ball_draw_x][ball_draw_y] = _add_colors(display_buf[ball_draw_x][ball_draw_y], StarlordsGame.BALL_COLOR)
         
@@ -307,3 +395,26 @@ class StarlordsGame:
             for x in range(self._display.width):
                 self._display[x, y] = display_buf[x][y]
         self._display.write()
+
+        if self._brick_bounce_since_last_render:
+            self._sample_player.play_sample(GameSample.BREAK, cancel_existing=True)
+        elif self._wall_bounce_since_last_render:
+            self._sample_player.play_sample(GameSample.BOUNCE, cancel_existing=True)
+        elif self._player_eliminated_since_last_render:
+            self._sample_player.play_sample(GameSample.PLAYER_DEATH, cancel_existing=True)
+
+            if len(self._state.active_players) == 1:
+                self._sample_player.play_sample(GameSample.PLAYER_WIN)
+
+        for player_index in self._ready_players_since_last_render:
+            sample = [GameSample.READY_PLAYER_ONE, GameSample.READY_PLAYER_TWO, GameSample.READY_PLAYER_THREE,
+                      GameSample.READY_PLAYER_FOUR][player_index]
+            self._sample_player.play_sample(sample)
+
+        if len(self._ready_players_since_last_render) > 0 and len(self._state.ready_players) == len(self._player_stations):
+            self._sample_player.play_sample(GameSample.GAME_START)
+
+        self._wall_bounce_since_last_render = False
+        self._brick_bounce_since_last_render = False
+        self._player_eliminated_since_last_render = False
+        self._ready_players_since_last_render.clear()

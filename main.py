@@ -1,6 +1,6 @@
 import time
 
-from hardware import display, player_station
+from hardware import display, player_station, sound
 import starlords
 
 sleep = time.sleep_us if hasattr(time, 'sleep_us') else lambda us: time.sleep(us / 1e6)
@@ -19,7 +19,9 @@ if player_station.IOPlayerStation is None:
 else:
     p1_station = player_station.IOPlayerStation(board.D17, board.D27, board.D22, 0, 10)
 
-game = starlords.StarlordsGame(game_disp, [p1_station, p2_station, p3_station, p4_station])
+sample_player = sound.SamplePlayer()
+
+game = starlords.StarlordsGame(game_disp, [p1_station, p2_station, p3_station, p4_station], sample_player)
 game._state.ball_velocity = starlords.Vector2(5.01, 1.0)
 
 target_ticks = 1000000000 // 10
