@@ -7,6 +7,7 @@ import enum
 
 
 class GameSample(enum.Enum):
+    IDLE_LOOP = 'spaceship-loop.wav'
     READY_PLAYER_ONE = 'ready-player-one.wav'
     READY_PLAYER_TWO = 'ready-player-two.wav'
     READY_PLAYER_THREE = 'ready-player-three.wav'
@@ -30,6 +31,7 @@ class SamplePlayer:
         self._curr_sample_offset = None
         self._output_device = sd.RawOutputStream(channels=1, dtype='int16', callback=self._stream_callback)
         self._output_device.start()
+        self.loop = False
 
     def _stream_callback(self, output: 'cffi.FFI.buffer', num_frames: int, time: 'cffi.FFI.CData', status: sd.CallbackFlags):
         output_start = 0
@@ -49,12 +51,20 @@ class SamplePlayer:
             self._curr_sample_offset += output_start
 
             if self._curr_sample_offset >= len(sample_data):
-                self._curr_sample = None
-                self._curr_sample_offset = None
+                if self.loop:
+                    self._curr_sample_offset = 0
+                else:
+                    self._curr_sample = None
+                    self._curr_sample_offset = None
 
         return
 
+    @property
+    def playing(self):
+        return not self._samples_to_play.empty() or self._curr_sample is not None
+
     def play_sample(self, sample: GameSample, cancel_existing: bool = False):
+        self.loop = False
         if cancel_existing:
             try:
                 while True:

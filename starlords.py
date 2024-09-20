@@ -149,49 +149,49 @@ class BallColliderType:
 
 COUNTDOWN_DIGITS = [
 '''
-  -
- --
-  -
-  -
-  -
-  -
- ---
+   -
+  --
+   -
+   -
+   -
+   -
+ -----
 ''',
 '''
----- 
-    -
-    -
- ---
+----- 
+     -
+     -
+ ----
 -
 -
- ----
+ -----
 ''',
 '''
------
-    -
-    -
- ----
-    -
-    -
------
+------
+     -
+     -
+  ----
+     -
+     -
+------
 ''',
 '''
--   -
--   -
--   -
- ----
-    -
-    -
-    -
+-    -
+-    -
+-    -
+ -----
+     -
+     -
+     -
 ''',
 '''
------
+------
 -
--    
------
-    -
--   -
- ---  
+-
+------
+     -
+-    -
+ ----
 '''
 ]
 COUNTDOWN_DIGITS = [[[char != ' ' for char in line] for line in digit.strip('\n').split('\n')] for digit in COUNTDOWN_DIGITS]
@@ -210,6 +210,8 @@ class StarlordsGame:
     SHIELD_SIZE = v2(1.0, 1.0)
     POWER_CORE_SIZE = v2(1.0, 1.0)
     BALL_SIZE = 1.0
+    BALL_MIN_SPEED = 8.0
+    BALL_MAX_SPEED = 30.0
     MAX_DELTA = 0.3
     MINIMUM_EXPLOSION_BRIGHTNESS = 0.05
     EXPLOSION_SHOCKWAVE_VELOCITY = 8.0
@@ -218,7 +220,8 @@ class StarlordsGame:
     def __init__(self, display: Display, player_stations: List[PlayerStation], sample_player: SamplePlayer):
         self._state = GameState(v2(display.width, display.height))
         self._ready_players_since_last_render = []
-        self._wall_bounce_since_last_render = False
+        self._new_game_since_last_render = True
+        self._ball_bounce_since_last_render = False
         self._brick_bounce_since_last_render = False
         self._player_eliminated_since_last_render = False
         self._display = display
@@ -318,18 +321,23 @@ class StarlordsGame:
                     self._state.ball_capture_speed = None
             elif len(filtered_collisions) > 0:
                 brick_removals = set()
+                current_speed = self._state.ball_velocity.length()
                 for coll_type, normal_vector, player_index, brick_index in filtered_collisions:
                     if coll_type == BallColliderType.WALL:
-                        self._wall_bounce_since_last_render = True
+                        self._ball_bounce_since_last_render = True
                     elif coll_type == BallColliderType.CASTLE_BRICK:
                         brick_pos = self._state.castle_bricks[player_index][brick_index]
                         brick_removals.add((player_index, brick_index))
+                        self._state.ball_velocity *= (self.BALL_MIN_SPEED / current_speed)
                         self._state.explosions.append((brick_pos + StarlordsGame.BRICK_SIZE / 2, 1.0, 5.0))
                         self._brick_bounce_since_last_render = True
                     elif coll_type == BallColliderType.SHIELD:
                         if self._player_stations[player_index].get_button_pressed():
                             self._state.ball_captured_by = player_index
-                            self._state.ball_capture_speed = self._state.ball_velocity.length()
+                            self._state.ball_capture_speed = current_speed
+                        else:
+                            self._state.ball_velocity *= (min(current_speed * 1.1, self.BALL_MAX_SPEED) / current_speed)
+                            self._ball_bounce_since_last_render = True
                     elif coll_type == BallColliderType.POWER_CORE:
                         self._state.explosions.append((self._state.power_core_positions[player_index] + StarlordsGame.POWER_CORE_SIZE / 2, 1.0, 100.0))
                         self._state.active_players.remove(player_index)
@@ -342,13 +350,16 @@ class StarlordsGame:
                                              for player_index, brick_list in enumerate(self._state.castle_bricks)]
 
                 avg_normal_vector = sum((normal_vector for _, normal_vector, _, _ in filtered_collisions), v2(0.0, 0.0))
-                avg_normal_vector = avg_normal_vector / avg_normal_vector.length()
 
-                # for coll_type, normal_vector, player_index, brick_index in self._get_ball_collisions():
-                dot_product = self._state.ball_velocity.dot(avg_normal_vector)
-                proj_velocity = dot_product * avg_normal_vector
-                reflected_proj_velocity = abs(dot_product) * avg_normal_vector
-                self._state.ball_velocity = self._state.ball_velocity - proj_velocity + reflected_proj_velocity
+                normal_length = avg_normal_vector.length()
+                if normal_length > 0.0:
+                    avg_normal_vector = avg_normal_vector / avg_normal_vector.length()
+
+                    # for coll_type, normal_vector, player_index, brick_index in self._get_ball_collisions():
+                    dot_product = self._state.ball_velocity.dot(avg_normal_vector)
+                    proj_velocity = dot_product * avg_normal_vector
+                    reflected_proj_velocity = abs(dot_product) * avg_normal_vector
+                    self._state.ball_velocity = self._state.ball_velocity - proj_velocity + reflected_proj_velocity
 
             self._state.ball_position = self._state.ball_position + self._state.ball_velocity * time_delta
 
@@ -360,8 +371,8 @@ class StarlordsGame:
 
         if self._state.game_start_time_remaining is not None and int(self._state.game_start_time_remaining) < len(COUNTDOWN_DIGITS):
             digit = COUNTDOWN_DIGITS[int(self._state.game_start_time_remaining)]
-            center_pos_x = (self._display.width - len(digit)) // 2
-            center_pos_y = (self._display.height - max(len(line) for line in digit)) // 2
+            center_pos_x = (self._display.width - max(len(line) for line in digit)) // 2
+            center_pos_y = (self._display.height - len(digit)) // 2
             for y, line in enumerate(digit):
                 for x, char in enumerate(line):
                     if char:
@@ -398,7 +409,7 @@ class StarlordsGame:
 
         if self._brick_bounce_since_last_render:
             self._sample_player.play_sample(GameSample.BREAK, cancel_existing=True)
-        elif self._wall_bounce_since_last_render:
+        elif self._ball_bounce_since_last_render:
             self._sample_player.play_sample(GameSample.BOUNCE, cancel_existing=True)
         elif self._player_eliminated_since_last_render:
             self._sample_player.play_sample(GameSample.PLAYER_DEATH, cancel_existing=True)
@@ -406,15 +417,27 @@ class StarlordsGame:
             if len(self._state.active_players) == 1:
                 self._sample_player.play_sample(GameSample.PLAYER_WIN)
 
-        for player_index in self._ready_players_since_last_render:
+        for i, player_index in enumerate(self._ready_players_since_last_render):
             sample = [GameSample.READY_PLAYER_ONE, GameSample.READY_PLAYER_TWO, GameSample.READY_PLAYER_THREE,
                       GameSample.READY_PLAYER_FOUR][player_index]
-            self._sample_player.play_sample(sample)
+            self._sample_player.play_sample(sample, cancel_existing=(i == 0 and len(self._state.ready_players) - len(self._ready_players_since_last_render) == 0))
 
         if len(self._ready_players_since_last_render) > 0 and len(self._state.ready_players) == len(self._player_stations):
             self._sample_player.play_sample(GameSample.GAME_START)
+        elif len(self._state.ready_players) == 0 and self._new_game_since_last_render:
+            self._sample_player.play_sample(GameSample.IDLE_LOOP, cancel_existing=True)
+            self._sample_player.loop = True
 
-        self._wall_bounce_since_last_render = False
+        self._new_game_since_last_render = False
+        self._ball_bounce_since_last_render = False
         self._brick_bounce_since_last_render = False
         self._player_eliminated_since_last_render = False
         self._ready_players_since_last_render.clear()
+
+    @property
+    def game_complete(self):
+        return self._state.game_complete
+
+    def reset_game(self):
+        self._state = GameState(v2(self._display.width, self._display.height))
+        self._new_game_since_last_render = True

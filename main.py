@@ -6,6 +6,9 @@ import starlords
 sleep = time.sleep_us if hasattr(time, 'sleep_us') else lambda us: time.sleep(us / 1e6)
 
 DISPLAY_SIZE = (16, 16)
+TARGET_FRAME_RATE = 30.0
+GAME_COMPLETE_PAUSE = 10.0
+
 
 if display.NeopixelDisplay is None:
     game_disp = display.PrintDisplay(DISPLAY_SIZE[0], DISPLAY_SIZE[1])
@@ -24,14 +27,21 @@ sample_player = sound.SamplePlayer()
 game = starlords.StarlordsGame(game_disp, [p1_station, p2_station, p3_station, p4_station], sample_player)
 game._state.ball_velocity = starlords.Vector2(5.01, 1.0)
 
-target_ticks = 1000000000 // 10
+target_ticks = 1000000000 / TARGET_FRAME_RATE
 frame = 0
 ticks = time.time_ns()
+game_completed_time = None
 while True:
     frame_time = target_ticks / 1.0e9
     while frame_time > 0.0:
         frame_time -= game.update(frame_time)
 
+    if game_completed_time is None and game.game_complete:
+        game_completed_time = ticks
+
+    if game_completed_time is not None and (ticks - game_completed_time) >= GAME_COMPLETE_PAUSE * 1.0e9:
+        game.reset_game()
+        game_completed_time = None
     # print(f'Frame {frame}:')
     game.render()
     # print()
