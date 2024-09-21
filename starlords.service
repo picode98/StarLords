@@ -2,6 +2,10 @@
 Description=StarLords game
 
 [Service]
-ExecStart=~/StarLords/venv/bin/python3 ~/StarLords/main.py
+ExecStart=/root/StarLords/venv/bin/python3 /root/StarLords/main.py
+WorkingDirectory=/root/StarLords
 Type=simple
 Restart=always
+
+[Install]
+WantedBy=multi-user.target
