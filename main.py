@@ -14,13 +14,15 @@ GAME_COMPLETE_PAUSE = 10.0
 if display.NeopixelDisplay is None:
     game_disp = display.PrintDisplay(DISPLAY_SIZE[0], DISPLAY_SIZE[1])
 else:
-    from board.pin import Pin
+    import board
+    Pin = board.pin.Pin
     game_disp = display.NeopixelDisplay(Pin(pins.LED_BIGPIXEL_PIN), DISPLAY_SIZE[0], DISPLAY_SIZE[1])
 
 if player_station.IOPlayerStation is None:
     p1_station, p2_station, p3_station, p4_station = player_station.FilePlayerStation('./p1_station.txt'), player_station.FilePlayerStation('./p2_station.txt'), player_station.FilePlayerStation('./p3_station.txt'), player_station.FilePlayerStation('./p4_station.txt')
 else:
-    from board.pin import Pin
+    import board
+    Pin = board.pin.Pin
     p1_station = player_station.IOPlayerStation(Pin(pins.CLICK_C1_PIN), Pin(pins.DIR_C1_PIN), Pin(pins.BUTTON_C1_PIN), 0, 10)
     p2_station = player_station.IOPlayerStation(Pin(pins.CLICK_C2_PIN), Pin(pins.DIR_C2_PIN), Pin(pins.BUTTON_C2_PIN), 0, 10)
     p3_station = player_station.IOPlayerStation(Pin(pins.CLICK_C3_PIN), Pin(pins.DIR_C3_PIN), Pin(pins.BUTTON_C3_PIN), 0, 10)

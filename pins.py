@@ -16,7 +16,7 @@ control box (audio volume control towers, audio volume sub woofers, bigpixel dis
 """
 5 volt level shifted outputs
 """
-LED_BIGPIXEL_PIN = 17
+LED_BIGPIXEL_PIN = 21
 LED_C1_PIN = 7
 LED_C2_PIN = 16
 LED_C3_PIN = 19
