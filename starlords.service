@@ -1,0 +1,7 @@
+[Unit]
+Description=StarLords game
+
+[Service]
+ExecStart=~/StarLords/venv/bin/python3 ~/StarLords/main.py
+Type=simple
+Restart=always

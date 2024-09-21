@@ -1,5 +1,6 @@
 import time
 
+import pins
 from hardware import display, player_station, sound
 import starlords
 
@@ -13,19 +14,25 @@ GAME_COMPLETE_PAUSE = 10.0
 if display.NeopixelDisplay is None:
     game_disp = display.PrintDisplay(DISPLAY_SIZE[0], DISPLAY_SIZE[1])
 else:
-    import board
-    game_disp = display.NeopixelDisplay(board.D18, DISPLAY_SIZE[0], DISPLAY_SIZE[1])
+    from board.pin import Pin
+    game_disp = display.NeopixelDisplay(Pin(pins.LED_BIGPIXEL_PIN), DISPLAY_SIZE[0], DISPLAY_SIZE[1])
 
-p2_station, p3_station, p4_station = player_station.FilePlayerStation('./p2_station.txt'), player_station.FilePlayerStation('./p3_station.txt'), player_station.FilePlayerStation('./p4_station.txt')
 if player_station.IOPlayerStation is None:
-    p1_station = player_station.FilePlayerStation('./p1_station.txt')
+    p1_station, p2_station, p3_station, p4_station = player_station.FilePlayerStation('./p1_station.txt'), player_station.FilePlayerStation('./p2_station.txt'), player_station.FilePlayerStation('./p3_station.txt'), player_station.FilePlayerStation('./p4_station.txt')
 else:
-    p1_station = player_station.IOPlayerStation(board.D17, board.D27, board.D22, 0, 10)
+    from board.pin import Pin
+    p1_station = player_station.IOPlayerStation(Pin(pins.CLICK_C1_PIN), Pin(pins.DIR_C1_PIN), Pin(pins.BUTTON_C1_PIN), 0, 10)
+    p2_station = player_station.IOPlayerStation(Pin(pins.CLICK_C2_PIN), Pin(pins.DIR_C2_PIN), Pin(pins.BUTTON_C2_PIN), 0, 10)
+    p3_station = player_station.IOPlayerStation(Pin(pins.CLICK_C3_PIN), Pin(pins.DIR_C3_PIN), Pin(pins.BUTTON_C3_PIN), 0, 10)
+    p4_station = player_station.IOPlayerStation(Pin(pins.CLICK_C4_PIN), Pin(pins.DIR_C4_PIN), Pin(pins.BUTTON_C4_PIN), 0, 10)
 
 sample_player = sound.SamplePlayer()
 
+# sample_player.play_sample(sound.GameSample.IDLE_LOOP, cancel_existing=True)
+# sample_player.loop = True
+# sleep(10000000000000)
+
 game = starlords.StarlordsGame(game_disp, [p1_station, p2_station, p3_station, p4_station], sample_player)
-game._state.ball_velocity = starlords.Vector2(5.01, 1.0)
 
 target_ticks = 1000000000 / TARGET_FRAME_RATE
 frame = 0

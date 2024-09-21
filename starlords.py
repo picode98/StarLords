@@ -1,4 +1,5 @@
 import math
+import random
 from typing import List
 
 from hardware.display import Display
@@ -113,13 +114,15 @@ def _circle_rectangle_collision(circle_pos: v2, circle_radius: float, rectangle_
 
 class GameState:
     """ information about which bricks are broken, projectile position, etc. """
-    def __init__(self, field_size: Vector2):
+    def __init__(self, field_size: Vector2, initial_ball_speed: float):
         w, h = field_size.x, field_size.y
         self.field_size: Vector2 = field_size
         self.ready_players = set()
         self.active_players = {0, 1, 2, 3}
         self.ball_position = v2(w / 2.0, h / 2.0)
-        self.ball_velocity = v2(0.0, 0.0)
+
+        ball_angle = random.random() * 2.0 * math.pi
+        self.ball_velocity = v2(initial_ball_speed * math.cos(ball_angle), initial_ball_speed * math.sin(ball_angle))
         self.ball_captured_by = None
         self.ball_releasing_from = None
         self.ball_capture_speed = None
@@ -218,7 +221,7 @@ class StarlordsGame:
     START_COUNTDOWN_LENGTH = 12.0
 
     def __init__(self, display: Display, player_stations: List[PlayerStation], sample_player: SamplePlayer):
-        self._state = GameState(v2(display.width, display.height))
+        self._state = GameState(v2(display.width, display.height), initial_ball_speed=self.BALL_MIN_SPEED)
         self._ready_players_since_last_render = []
         self._new_game_since_last_render = True
         self._ball_bounce_since_last_render = False
@@ -365,6 +368,17 @@ class StarlordsGame:
 
         return time_delta
 
+    #   File "/home/pi/StarLords/main.py", line 31, in <module>
+    #     frame_time -= game.update(frame_time)
+    #                   ^^^^^^^^^^^^^^^^^^^^^^^
+    #   File "/home/pi/StarLords/starlords.py", line 266, in update
+    #     avg_normal_vector = avg_normal_vector / avg_normal_vector.length()
+    #                         ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #   File "/home/pi/StarLords/starlords.py", line 56, in __truediv__
+    #     return Vector2(self.x / other, self.y / other)
+    #                    ~~~~~~~^~~~~~~
+    # ZeroDivisionError: float division by zero
+
     def render(self):
         """ draw self._state to self._display """
         display_buf = [[(0, 0, 0) for _ in range(self._display.height)] for _ in range(self._display.width)]
@@ -439,5 +453,5 @@ class StarlordsGame:
         return self._state.game_complete
 
     def reset_game(self):
-        self._state = GameState(v2(self._display.width, self._display.height))
+        self._state = GameState(v2(self._display.width, self._display.height), initial_ball_speed=self.BALL_MIN_SPEED)
         self._new_game_since_last_render = True
