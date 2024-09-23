@@ -2,8 +2,8 @@ import math
 import random
 from typing import List
 
-from hardware.display import Display
-from hardware.player_station import PlayerStation
+from hardware.display.display import Display
+from hardware.player_station.player_station import PlayerStation
 from hardware.sound import SamplePlayer, GameSample
 
 def _add_colors(*args):

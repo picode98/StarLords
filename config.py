@@ -1,5 +1,24 @@
+"""
+General configuration variables for game setup
+"""
+import enum
+
+
+class DisplayMode(enum.StrEnum):
+    PRINT = 'print'
+    NEOPIXEL = 'neopixel'
+    ARTNET = 'artnet'
+
+
+DISPLAY_MODE = DisplayMode.ARTNET
+DISPLAY_SIZE = (16, 16)
+SIMULATE_PLAYER_STATIONS = True
+ARTNET_IP = '10.0.0.3'
+ARTNET_PORT = 6454
+TARGET_FRAME_RATE = 30.0
+GAME_COMPLETE_PAUSE = 10.0
+
 """ 
-pins.py
 Raspberry Pi 3B+ pinouts 
 GPIO.setmode(GPIO.BCM) broadcom chip pin numbers
 as labeled on xikentech breakout board with screw terminals
