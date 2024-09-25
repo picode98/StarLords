@@ -20,3 +20,6 @@ class FilePlayerStation(PlayerStation):
             file_iter = iter(input_file)
             next(file_iter)
             return next(file_iter) == '1'
+
+    def get_num_ring_light_pixels(self) -> int:
+        return 16

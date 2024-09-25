@@ -28,12 +28,14 @@ if config.SIMULATE_PLAYER_STATIONS:
     p1_station, p2_station, p3_station, p4_station = FilePlayerStation('./p1_station.txt'), FilePlayerStation('./p2_station.txt'), FilePlayerStation('./p3_station.txt'), FilePlayerStation('./p4_station.txt')
 else:
     import board
+    import neopixel
     from hardware.player_station.io_player_station import IOPlayerStation
     Pin = board.pin.Pin
-    p1_station = IOPlayerStation(Pin(config.CLICK_C1_PIN), Pin(config.DIR_C1_PIN), Pin(config.BUTTON_C1_PIN), Pin(config.LED_C1_PIN), 0, 10, 16)
-    p2_station = IOPlayerStation(Pin(config.CLICK_C2_PIN), Pin(config.DIR_C2_PIN), Pin(config.BUTTON_C2_PIN), Pin(config.LED_C2_PIN), 0, 10, 16)
-    p3_station = IOPlayerStation(Pin(config.CLICK_C3_PIN), Pin(config.DIR_C3_PIN), Pin(config.BUTTON_C3_PIN), Pin(config.LED_C3_PIN), 0, 10, 16)
-    p4_station = IOPlayerStation(Pin(config.CLICK_C4_PIN), Pin(config.DIR_C4_PIN), Pin(config.BUTTON_C4_PIN), Pin(config.LED_C4_PIN), 0, 10, 16)
+    ring_light_string = neopixel.NeoPixel(Pin(config.LED_C1_PIN), 64, auto_write=False)
+    p1_station = IOPlayerStation(Pin(config.CLICK_C1_PIN), Pin(config.DIR_C1_PIN), Pin(config.BUTTON_C1_PIN), ring_light_string, 0, 10, range(0, config.PLAYER_STATION_RING_LIGHT_LENGTH))
+    p2_station = IOPlayerStation(Pin(config.CLICK_C2_PIN), Pin(config.DIR_C2_PIN), Pin(config.BUTTON_C2_PIN), ring_light_string, 0, 10, range(config.PLAYER_STATION_RING_LIGHT_LENGTH, 2 * config.PLAYER_STATION_RING_LIGHT_LENGTH))
+    p3_station = IOPlayerStation(Pin(config.CLICK_C3_PIN), Pin(config.DIR_C3_PIN), Pin(config.BUTTON_C3_PIN), ring_light_string, 0, 10, range(2 * config.PLAYER_STATION_RING_LIGHT_LENGTH, 3 * config.PLAYER_STATION_RING_LIGHT_LENGTH))
+    p4_station = IOPlayerStation(Pin(config.CLICK_C4_PIN), Pin(config.DIR_C4_PIN), Pin(config.BUTTON_C4_PIN), ring_light_string, 0, 10, range(3 * config.PLAYER_STATION_RING_LIGHT_LENGTH, 4 * config.PLAYER_STATION_RING_LIGHT_LENGTH))
 
 sample_player = sound.SamplePlayer()
 

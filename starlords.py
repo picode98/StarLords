@@ -421,6 +421,19 @@ class StarlordsGame:
                 self._display[x, y] = display_buf[x][y]
         self._display.write()
 
+        if not self._state.game_started:
+            for player_index, player_station in enumerate(self._player_stations):
+                for pxl in range(player_station.get_num_ring_light_pixels()):
+                    player_station.set_ring_light_value(pxl, (255, 255, 255) if player_index in self._state.ready_players else (50, 50, 50))
+        elif not self._state.game_complete:
+            for player_index, player_station in enumerate(self._player_stations):
+                for pxl in range(player_station.get_num_ring_light_pixels()):
+                    player_station.set_ring_light_value(pxl, (0, 255, 0) if player_index in self._state.active_players else (255, 0, 0))
+        else:
+            for player_index, player_station in enumerate(self._player_stations):
+                for pxl in range(player_station.get_num_ring_light_pixels()):
+                    player_station.set_ring_light_value(pxl, (0xd5, 0x8f, 0) if player_index in self._state.active_players else (255, 0, 0))
+
         if self._brick_bounce_since_last_render:
             self._sample_player.play_sample(GameSample.BREAK, cancel_existing=True)
         elif self._ball_bounce_since_last_render:
