@@ -202,13 +202,13 @@ COUNTDOWN_DIGITS = [[[char != ' ' for char in line] for line in digit.strip('\n'
 
 
 class StarlordsGame:
-    BALL_COLOR = (50, 50, 50)
-    BRICK_COLOR = (0, 0, 50)
-    SHIELD_COLOR = (50, 0, 0)
-    WINNER_BRICK_COLOR = (int(round(0xd5 * 0.2)), int(round(0x8f * 0.2)), 0)
-    POWER_CORE_COLOR = (30, 50, 30)
-    EXPLOSION_COLOR = (50, 50, 50)
-    COUNTDOWN_DIGIT_COLOR = (50, 50, 50)
+    BALL_COLOR = (200, 0, 0)
+    BRICK_COLOR = (0, 0, 200)
+    SHIELD_COLOR = (0, 200, 0)
+    WINNER_BRICK_COLOR = (0xd5, 0x8f, 0)
+    POWER_CORE_COLOR = (100, 200, 100)
+    EXPLOSION_COLOR = (200, 200, 200)
+    COUNTDOWN_DIGIT_COLOR = (200, 200, 200)
     BRICK_SIZE = v2(1.0, 1.0)
     SHIELD_SIZE = v2(1.0, 1.0)
     POWER_CORE_SIZE = v2(1.0, 1.0)
@@ -433,6 +433,9 @@ class StarlordsGame:
             for player_index, player_station in enumerate(self._player_stations):
                 for pxl in range(player_station.get_num_ring_light_pixels()):
                     player_station.set_ring_light_value(pxl, (0xd5, 0x8f, 0) if player_index in self._state.active_players else (255, 0, 0))
+
+#        for player_station in self._player_stations:
+#            player_station.write_ring_light()
 
         if self._brick_bounce_since_last_render:
             self._sample_player.play_sample(GameSample.BREAK, cancel_existing=True)

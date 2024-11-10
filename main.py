@@ -13,7 +13,7 @@ elif config.DISPLAY_MODE == config.DisplayMode.NEOPIXEL:
     import board
     from hardware.display.neopixel_display import NeopixelDisplay
     Pin = board.pin.Pin
-    game_disp = NeopixelDisplay(Pin(config.LED_BIGPIXEL_PIN), config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1])
+    game_disp = NeopixelDisplay(Pin(config.LED_BIGPIXEL_PIN), config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1], config.DISPLAY_NEOPIXEL_BPP, config.DISPLAY_NEOPIXEL_PIXEL_ORDER)
 elif config.DISPLAY_MODE == config.DisplayMode.ARTNET:
     import pyartnet
     from hardware.display.artnet_display import ArtNetDisplay
@@ -38,10 +38,6 @@ else:
     p4_station = IOPlayerStation(Pin(config.CLICK_C4_PIN), Pin(config.DIR_C4_PIN), Pin(config.BUTTON_C4_PIN), ring_light_string, 0, 10, range(3 * config.PLAYER_STATION_RING_LIGHT_LENGTH, 4 * config.PLAYER_STATION_RING_LIGHT_LENGTH))
 
 sample_player = sound.SamplePlayer()
-
-# sample_player.play_sample(sound.GameSample.IDLE_LOOP, cancel_existing=True)
-# sample_player.loop = True
-# sleep(10000000000000)
 
 game = starlords.StarlordsGame(game_disp, [p1_station, p2_station, p3_station, p4_station], sample_player)
 
