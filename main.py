@@ -6,9 +6,16 @@ import starlords
 
 sleep = time.sleep_us if hasattr(time, 'sleep_us') else lambda us: time.sleep(us / 1e6)
 
+root_window = None
 if config.DISPLAY_MODE == config.DisplayMode.PRINT:
     from hardware.display import print_display
     game_disp = print_display.PrintDisplay(config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1])
+elif config.DISPLAY_MODE == config.DisplayMode.GUI:
+    from hardware.display import gui_display
+    import tkinter
+    root_window = tkinter.Tk()
+    root_window.title('StarLords')
+    game_disp = gui_display.GUIDisplay(root_window, config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1], 500, 500)
 elif config.DISPLAY_MODE == config.DisplayMode.NEOPIXEL:
     import board
     from hardware.display.neopixel_display import NeopixelDisplay
@@ -24,8 +31,13 @@ else:
     raise RuntimeError('Invalid DISPLAY_MODE setting.')
 
 if config.SIMULATE_PLAYER_STATIONS:
-    from hardware.player_station.file_player_station import FilePlayerStation
-    p1_station, p2_station, p3_station, p4_station = FilePlayerStation('./p1_station.txt'), FilePlayerStation('./p2_station.txt'), FilePlayerStation('./p3_station.txt'), FilePlayerStation('./p4_station.txt')
+    if config.DISPLAY_MODE == config.DisplayMode.GUI:
+        from hardware.player_station.gui_player_station import GUIPlayerStation
+        p1_station, p2_station, p3_station, p4_station = GUIPlayerStation(1, root_window), GUIPlayerStation(2, root_window), \
+                                                         GUIPlayerStation(3, root_window), GUIPlayerStation(4, root_window)
+    else:
+        from hardware.player_station.file_player_station import FilePlayerStation
+        p1_station, p2_station, p3_station, p4_station = FilePlayerStation('./p1_station.txt'), FilePlayerStation('./p2_station.txt'), FilePlayerStation('./p3_station.txt'), FilePlayerStation('./p4_station.txt')
 else:
     import board
     import neopixel
@@ -41,30 +53,46 @@ sample_player = sound.SamplePlayer()
 
 game = starlords.StarlordsGame(game_disp, [p1_station, p2_station, p3_station, p4_station], sample_player)
 
-target_ticks = 1000000000 / config.TARGET_FRAME_RATE
-frame = 0
-ticks = time.time_ns()
-game_completed_time = None
-while True:
-    frame_time = target_ticks / 1.0e9
-    while frame_time > 0.0:
-        frame_time -= game.update(frame_time)
-
-    if game_completed_time is None and game.game_complete:
-        game_completed_time = ticks
-
-    if game_completed_time is not None and (ticks - game_completed_time) >= config.GAME_COMPLETE_PAUSE * 1.0e9:
-        game.reset_game()
-        game_completed_time = None
-    # print(f'Frame {frame}:')
-    game.render()
-    # print()
-
-    frame_ticks = time.time_ns() - ticks
-    if frame_ticks > target_ticks:
-        print(f'WARNING: Below target frame rate (frame took {frame_ticks} ns).')
-    else:
-        sleep((target_ticks - frame_ticks) // 1000)
-
-    frame += 1
+cancel_game_loop = False
+def game_loop():
+    target_ticks = 1000000000 / config.TARGET_FRAME_RATE
+    frame = 0
     ticks = time.time_ns()
+    game_completed_time = None
+
+    while not cancel_game_loop:
+        frame_time = target_ticks / 1.0e9
+        while frame_time > 0.0:
+            frame_time -= game.update(frame_time)
+
+        if game_completed_time is None and game.game_complete:
+            game_completed_time = ticks
+
+        if game_completed_time is not None and (ticks - game_completed_time) >= config.GAME_COMPLETE_PAUSE * 1.0e9:
+            game.reset_game()
+            game_completed_time = None
+        # print(f'Frame {frame}:')
+        game.render()
+        # print()
+
+        frame_ticks = time.time_ns() - ticks
+        if frame_ticks > target_ticks:
+            print(f'WARNING: Below target frame rate (frame took {frame_ticks} ns).')
+        else:
+            sleep((target_ticks - frame_ticks) // 1000)
+
+        frame += 1
+        ticks = time.time_ns()
+
+
+if config.DISPLAY_MODE == config.DisplayMode.GUI:
+    import threading
+    game_thread = threading.Thread(target=game_loop)
+    game_thread.start()
+
+    try:
+        root_window.mainloop()
+    finally:
+        cancel_game_loop = True
+else:
+    game_loop()

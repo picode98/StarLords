@@ -6,6 +6,7 @@ import enum
 
 class DisplayMode(enum.StrEnum):
     PRINT = 'print'
+    GUI = 'gui'
     NEOPIXEL = 'neopixel'
     ARTNET = 'artnet'
 
