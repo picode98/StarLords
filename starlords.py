@@ -1,7 +1,6 @@
 import math
 import random
-from typing import List
-
+from typing import List, Optional
 from hardware.display.display import Display
 from hardware.player_station.player_station import PlayerStation
 from hardware.sound import SamplePlayer, GameSample
@@ -114,16 +113,19 @@ def _circle_rectangle_collision(circle_pos: v2, circle_radius: float, rectangle_
 
 class GameState:
     """ information about which bricks are broken, projectile position, etc. """
-    def __init__(self, field_size: Vector2, initial_ball_speed: float):
+    def __init__(self, field_size: Vector2, initial_ball_speed: float, rng: Optional[random.Random] = None):
         w, h = field_size.x, field_size.y
         self.field_size: Vector2 = field_size
         self.ready_players = set()
         self.ready_player_wait_time = 0.0
+        self.idle_time = 0.0
         self.active_players = {0, 1, 2, 3}
         self.ball_position = v2(w / 2.0, h / 2.0)
 
+        self.rng = rng or random.Random()
+
         while True:
-            ball_angle = random.random() * 2.0 * math.pi
+            ball_angle = self.rng.random() * 2.0 * math.pi
             multiples_of_pi_4 = ball_angle / (math.pi / 4.0)
             if abs(round(multiples_of_pi_4) - multiples_of_pi_4) >= 0.05:
                 break
@@ -156,6 +158,20 @@ class BallColliderType:
     CASTLE_BRICK = 1
     SHIELD = 2
     POWER_CORE = 3
+
+STARLORDS_TITLE = '''
+ ---- -----   -   ----  -      ---  ----  ----   ----
+-       -    - -  -   - -     -   - -   - -   - -
+-       -   -   - -   - -     -   - -   - -   - -
+ ---    -   ----- ----  -     -   - ----  -   -  ---
+    -   -   -   - -  -  -     -   - -  -  -   -     -
+    -   -   -   - -   - -     -   - -   - -   -     -
+----    -   -   - -   - -----  ---  -   - ----  ----
+'''
+STARLORDS_TITLE = [[char != ' ' for char in line] for line in STARLORDS_TITLE.strip('\n').split('\n')]
+_title_width = max(len(line) for line in STARLORDS_TITLE)
+for line in STARLORDS_TITLE:
+    line.extend([False] * (_title_width - len(line)))
 
 COUNTDOWN_DIGITS = [
 '''
@@ -224,11 +240,14 @@ class StarlordsGame:
     BALL_MAX_SPEED = 30.0
     MAX_DELTA = 0.3
     MINIMUM_EXPLOSION_BRIGHTNESS = 0.05
-    EXPLOSION_SHOCKWAVE_VELOCITY = 8.0
+    EXPLOSION_SHOCKWAVE_VELOCITY = 12.0
     START_COUNTDOWN_LENGTH = 12.0
     PLAYER_START_TIMEOUT = 30.0
-    MAX_SHIELD_SPEED = 8.0
+    MAX_SHIELD_SPEED = 15.0
     MAX_SHIELD_POSITION = 10.0
+    IDLE_ANIM_SPEED = 10.0
+    WALL_BOUNCE_DEFLECT_PROB = 0.1
+    WALL_BOUNCE_DEFLECT_MAX_ANGLE = 0.03
 
     def __init__(self, display: Display, player_stations: List[PlayerStation], sample_player: SamplePlayer):
         self._state = GameState(v2(display.width, display.height), initial_ball_speed=self.BALL_MIN_SPEED)
@@ -243,21 +262,30 @@ class StarlordsGame:
         assert len(player_stations) == 4
         self._player_stations = player_stations
 
+    def _wall_normal_vector(self, base_vector: v2):
+        if self._state.rng.random() < self.WALL_BOUNCE_DEFLECT_PROB:
+            theta = self._state.rng.random() * (2 * self.WALL_BOUNCE_DEFLECT_MAX_ANGLE) - self.WALL_BOUNCE_DEFLECT_MAX_ANGLE
+            sin_t, cos_t = math.sin(theta), math.cos(theta)
+            return v2(base_vector.x * cos_t - base_vector.y * sin_t, base_vector.x * sin_t + base_vector.y * cos_t)
+        else:
+            return base_vector
+
     def _get_ball_collisions(self):
         colliders = []
         if (self._state.ball_position.x + self.BALL_SIZE / 2.0) >= self._state.field_size.x:
-            colliders.append((BallColliderType.WALL, v2(-1.0, 0.0), None, None))
+            colliders.append((BallColliderType.WALL, self._wall_normal_vector(v2(-1.0, 0.0)), None, None))
 
         if (self._state.ball_position.x - self.BALL_SIZE / 2.0) <= 0.0:
-            colliders.append((BallColliderType.WALL, v2(1.0, 0.0), None, None))
+            colliders.append((BallColliderType.WALL, self._wall_normal_vector(v2(1.0, 0.0)), None, None))
 
         if (self._state.ball_position.y + self.BALL_SIZE / 2.0) >= self._state.field_size.y:
-            colliders.append((BallColliderType.WALL, v2(0.0, -1.0), None, None))
+            colliders.append((BallColliderType.WALL, self._wall_normal_vector(v2(0.0, -1.0)), None, None))
 
         if (self._state.ball_position.y - self.BALL_SIZE / 2.0) <= 0.0:
-            colliders.append((BallColliderType.WALL, v2(0.0, 1.0), None, None))
+            colliders.append((BallColliderType.WALL, self._wall_normal_vector(v2(0.0, 1.0)), None, None))
 
-        for player_index, brick_list in enumerate(self._state.castle_bricks):
+        for player_index in self._state.active_players:
+            brick_list = self._state.castle_bricks[player_index]
             for brick_index, brick_pos in enumerate(brick_list):
                 collision_normal_vector = _circle_rectangle_collision(self._state.ball_position, self.BALL_SIZE / 2.0, brick_pos, self.BRICK_SIZE)
                 if collision_normal_vector is not None:
@@ -307,6 +335,10 @@ class StarlordsGame:
 
         self._state.explosions = new_explosions
 
+        if not self._state.game_started and len(self._state.ready_players) == 0:
+            self._state.idle_time += time_delta
+        else:
+            self._state.idle_time = 0.0
 
         if self._state.game_start_time_remaining is not None:
             self._state.game_start_time_remaining -= time_delta
@@ -323,7 +355,7 @@ class StarlordsGame:
 
             if len(self._state.ready_players) == len(self._player_stations):
                 self._state.game_start_time_remaining = self.START_COUNTDOWN_LENGTH
-            elif self._state.ready_player_wait_time >= self.PLAYER_START_TIMEOUT:
+            elif len(self._state.ready_players) >= 1 and self._state.ready_player_wait_time >= self.PLAYER_START_TIMEOUT:
                 self.reset_game()
         elif not self._state.game_complete:
             collisions = self._get_ball_collisions()
@@ -347,7 +379,7 @@ class StarlordsGame:
                     new_velocity = captured_shield_position - corner_position
                     scaled_new_velocity = new_velocity * (self._state.ball_capture_speed / new_velocity.length())
 
-                    self._state.ball_velocity = scaled_new_velocity
+                    self._state.ball_velocity = scaled_new_velocity + shield_velocities[self._state.ball_captured_by]
                     self._state.ball_releasing_from = self._state.ball_captured_by
                     self._state.ball_captured_by = None
                     self._state.ball_capture_speed = None
@@ -360,7 +392,7 @@ class StarlordsGame:
                     elif coll_type == BallColliderType.CASTLE_BRICK:
                         brick_pos = self._state.castle_bricks[player_index][brick_index]
                         brick_removals.add((player_index, brick_index))
-                        self._state.ball_velocity *= (self.BALL_MIN_SPEED / current_speed)
+                        self._state.ball_velocity *= (self.BALL_MIN_SPEED / current_speed) if current_speed > 0.0 else 1.0
                         self._state.explosions.append((brick_pos + StarlordsGame.BRICK_SIZE / 2, 1.0, 5.0))
                         self._brick_bounce_since_last_render = True
                     elif coll_type == BallColliderType.SHIELD:
@@ -368,7 +400,7 @@ class StarlordsGame:
                             self._state.ball_captured_by = player_index
                             self._state.ball_capture_speed = current_speed
                         else:
-                            self._state.ball_velocity *= (min(current_speed * 1.1, self.BALL_MAX_SPEED) / current_speed)
+                            self._state.ball_velocity *= 1.1
                             self._ball_bounce_since_last_render = True
                     elif coll_type == BallColliderType.POWER_CORE:
                         self._state.explosions.append((self._state.power_core_positions[player_index] + StarlordsGame.POWER_CORE_SIZE / 2, 1.0, 100.0))
@@ -383,16 +415,20 @@ class StarlordsGame:
 
                 # avg_normal_vector = sum((normal_vector for _, normal_vector, _, _ in filtered_collisions), v2(0.0, 0.0))
                 #
-                # normal_length = avg_normal_vector.length()
+                # normal_length = avg_normal_vector.length()    
                 # if normal_length > 0.0:
                 #     avg_normal_vector = avg_normal_vector / avg_normal_vector.length()
 
-                for coll_type, normal_vector, player_index, brick_index in self._get_ball_collisions():
+                for coll_type, normal_vector, player_index, brick_index in collisions:
                     collider_velocity = shield_velocities[player_index] if coll_type == BallColliderType.SHIELD else v2(0.0, 0.0)
                     dot_product = (self._state.ball_velocity - collider_velocity).dot(normal_vector)
                     proj_velocity = dot_product * normal_vector
                     reflected_proj_velocity = abs(dot_product) * normal_vector
-                    self._state.ball_velocity = self._state.ball_velocity - proj_velocity + reflected_proj_velocity + collider_velocity
+                    self._state.ball_velocity = self._state.ball_velocity - proj_velocity + reflected_proj_velocity
+
+            current_speed = self._state.ball_velocity.length()
+            if current_speed >= self.BALL_MAX_SPEED:
+                self._state.ball_velocity *= self.BALL_MAX_SPEED / current_speed
 
             self._state.ball_position = self._state.ball_position + self._state.ball_velocity * time_delta
 
@@ -413,7 +449,17 @@ class StarlordsGame:
         """ draw self._state to self._display """
         display_buf = [[(0, 0, 0) for _ in range(self._display.height)] for _ in range(self._display.width)]
 
-        if self._state.game_start_time_remaining is not None and int(self._state.game_start_time_remaining) < len(COUNTDOWN_DIGITS):
+        if not self._state.game_started and len(self._state.ready_players) == 0:
+            line_length = len(STARLORDS_TITLE[0])
+            offset = int(self._state.idle_time * self.IDLE_ANIM_SPEED) % (line_length + self._display.width)
+            center_pos_y = (self._display.height - len(STARLORDS_TITLE)) // 2
+            title_start_x = max(line_length - offset, 0)
+            display_start_x = max(offset - line_length, 0)
+            for y, line in enumerate(STARLORDS_TITLE):
+                for x, char in enumerate(line[title_start_x:title_start_x + self._display.width - display_start_x]):
+                    if char:
+                        display_buf[display_start_x + x][center_pos_y + y] = self.COUNTDOWN_DIGIT_COLOR
+        elif self._state.game_start_time_remaining is not None and int(self._state.game_start_time_remaining) < len(COUNTDOWN_DIGITS):
             digit = COUNTDOWN_DIGITS[int(self._state.game_start_time_remaining)]
             center_pos_x = (self._display.width - max(len(line) for line in digit)) // 2
             center_pos_y = (self._display.height - len(digit)) // 2
