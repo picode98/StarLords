@@ -134,6 +134,7 @@ class GameState:
         self.ball_captured_by = None
         self.ball_releasing_from = None
         self.ball_capture_speed = None
+        self.ball_min_speed = initial_ball_speed
         self.castle_bricks = [[v2(3.0, 0.0), v2(3.0, 1.0), v2(3.0, 2.0), v2(3.0, 3.0), v2(2.0, 3.0), v2(1.0, 3.0), v2(0.0, 3.0)],
                               [v2(w - 4.0, 0.0), v2(w - 4.0, 1.0), v2(w - 4.0, 2.0), v2(w - 4.0, 3.0), v2(w - 3.0, 3.0), v2(w - 2.0, 3.0), v2(w - 1.0, 3.0)],
                               [v2(w - 4.0, h - 1.0), v2(w - 4.0, h - 2.0), v2(w - 4.0, h - 3.0), v2(w - 4.0, h - 4.0), v2(w - 3.0, h - 4.0), v2(w - 2.0, h - 4.0), v2(w - 1.0, h - 4.0)],
@@ -147,6 +148,7 @@ class GameState:
         self.shield_positions = [0.0, 0.0, 0.0, 0.0]
         self.shield_position_biases = [0.0, 0.0, 0.0, 0.0]
         self.power_core_positions = [v2(1, 1), v2(w - 2, 1), v2(w - 2, h - 2), v2(1, h - 2)]
+        self.handled_collisions = set()
         self.explosions = []
         self.game_started = False
         self.game_start_time_remaining = None
@@ -225,13 +227,15 @@ COUNTDOWN_DIGITS = [[[char != ' ' for char in line] for line in digit.strip('\n'
 
 
 class StarlordsGame:
-    BALL_COLOR = (200, 0, 0)
-    BRICK_COLOR = (0, 0, 200)
-    SHIELD_COLOR = (0, 200, 0)
-    WINNER_BRICK_COLOR = (0xd5, 0x8f, 0)
-    POWER_CORE_COLOR = (100, 200, 100)
-    EXPLOSION_COLOR = (200, 200, 200)
-    COUNTDOWN_DIGIT_COLOR = (200, 200, 200)
+    INVERT_DISPLAY_X = False
+    INVERT_DISPLAY_Y = True
+    BALL_COLOR = (255, 0, 0)
+    BRICK_COLOR = (0, 0, 255)
+    SHIELD_COLOR = (0, 255, 0)
+    WINNER_BRICK_COLOR = (234, 157, 0)
+    POWER_CORE_COLOR = (125, 255, 125)
+    EXPLOSION_COLOR = (255, 255, 255)
+    COUNTDOWN_DIGIT_COLOR = (255, 255, 255)
     BRICK_SIZE = v2(1.0, 1.0)
     SHIELD_SIZE = v2(1.0, 1.0)
     POWER_CORE_SIZE = v2(1.0, 1.0)
@@ -363,6 +367,8 @@ class StarlordsGame:
 
             if len(filtered_collisions) == len(collisions):
                 self._state.ball_releasing_from = None
+
+            debounced_collisions = [collision for collision in filtered_collisions if (collision[0], collision[2], collision[3]) not in self._state.handled_collisions]
             # for _, normal_vector, _, _ in collisions:
             #     avg_normal_vector = (avg_normal_vector[0] + normal_vector[0], avg_normal_vector[1] + normal_vector[1])
 
@@ -383,15 +389,17 @@ class StarlordsGame:
                     self._state.ball_releasing_from = self._state.ball_captured_by
                     self._state.ball_captured_by = None
                     self._state.ball_capture_speed = None
-            elif len(filtered_collisions) > 0:
+            elif len(debounced_collisions) > 0:
                 brick_removals = set()
                 current_speed = self._state.ball_velocity.length()
-                for coll_type, normal_vector, player_index, brick_index in filtered_collisions:
+                for coll_type, normal_vector, player_index, brick_index in debounced_collisions:
                     if coll_type == BallColliderType.WALL:
                         self._ball_bounce_since_last_render = True
+                        self._state.ball_min_speed = min(self._state.ball_min_speed * 1.05, self.BALL_MAX_SPEED)
                     elif coll_type == BallColliderType.CASTLE_BRICK:
                         brick_pos = self._state.castle_bricks[player_index][brick_index]
                         brick_removals.add((player_index, brick_index))
+                        self._state.ball_min_speed = self.BALL_MIN_SPEED
                         self._state.ball_velocity *= (self.BALL_MIN_SPEED / current_speed) if current_speed > 0.0 else 1.0
                         self._state.explosions.append((brick_pos + StarlordsGame.BRICK_SIZE / 2, 1.0, 5.0))
                         self._brick_bounce_since_last_render = True
@@ -400,11 +408,14 @@ class StarlordsGame:
                             self._state.ball_captured_by = player_index
                             self._state.ball_capture_speed = current_speed
                         else:
-                            self._state.ball_velocity *= 1.1
+                            self._state.ball_min_speed = min(self._state.ball_min_speed * 1.05, self.BALL_MAX_SPEED)
                             self._ball_bounce_since_last_render = True
                     elif coll_type == BallColliderType.POWER_CORE:
                         self._state.explosions.append((self._state.power_core_positions[player_index] + StarlordsGame.POWER_CORE_SIZE / 2, 1.0, 100.0))
                         self._state.active_players.remove(player_index)
+                        self._state.ball_min_speed = self.BALL_MIN_SPEED
+                        self._state.ball_velocity *= (self.BALL_MIN_SPEED / current_speed) if current_speed > 0.0 else 1.0
+
                         self._player_eliminated_since_last_render = True
 
                         if len(self._state.active_players) == 1:
@@ -419,18 +430,26 @@ class StarlordsGame:
                 # if normal_length > 0.0:
                 #     avg_normal_vector = avg_normal_vector / avg_normal_vector.length()
 
-                for coll_type, normal_vector, player_index, brick_index in collisions:
+                for coll_type, normal_vector, player_index, brick_index in filtered_collisions:
                     collider_velocity = shield_velocities[player_index] if coll_type == BallColliderType.SHIELD else v2(0.0, 0.0)
+                    elasticity = 0.2 if coll_type == BallColliderType.SHIELD and (coll_type, player_index, brick_index) in debounced_collisions else 1.0
                     dot_product = (self._state.ball_velocity - collider_velocity).dot(normal_vector)
                     proj_velocity = dot_product * normal_vector
-                    reflected_proj_velocity = abs(dot_product) * normal_vector
+                    reflected_proj_velocity = elasticity * abs(dot_product) * normal_vector
                     self._state.ball_velocity = self._state.ball_velocity - proj_velocity + reflected_proj_velocity
 
             current_speed = self._state.ball_velocity.length()
             if current_speed >= self.BALL_MAX_SPEED:
                 self._state.ball_velocity *= self.BALL_MAX_SPEED / current_speed
+            elif current_speed < self._state.ball_min_speed and self._state.ball_captured_by is None:
+                if current_speed == 0.0:
+                    print('WARNING: Ball was stopped, but not captured.')
+                    self._state.ball_velocity = v2(self._state.ball_min_speed, 0.0)
+                else:
+                    self._state.ball_velocity *= self._state.ball_min_speed / current_speed
 
             self._state.ball_position = self._state.ball_position + self._state.ball_velocity * time_delta
+            self._state.handled_collisions = {(collision[0], collision[2], collision[3]) for collision in collisions}
 
         return time_delta
 
@@ -451,7 +470,7 @@ class StarlordsGame:
 
         if not self._state.game_started and len(self._state.ready_players) == 0:
             line_length = len(STARLORDS_TITLE[0])
-            offset = int(self._state.idle_time * self.IDLE_ANIM_SPEED) % (line_length + self._display.width)
+            offset = (line_length + self._display.width - 1) - int(self._state.idle_time * self.IDLE_ANIM_SPEED) % (line_length + self._display.width)
             center_pos_y = (self._display.height - len(STARLORDS_TITLE)) // 2
             title_start_x = max(line_length - offset, 0)
             display_start_x = max(offset - line_length, 0)
@@ -494,7 +513,7 @@ class StarlordsGame:
         
         for y in range(self._display.height):
             for x in range(self._display.width):
-                self._display[x, y] = display_buf[x][y]
+                self._display[x, y] = display_buf[(self._display.width - 1) - x if self.INVERT_DISPLAY_X else x][(self._display.height - 1) - y if self.INVERT_DISPLAY_Y else y]
         self._display.write()
 
         if not self._state.game_started:
