@@ -395,7 +395,7 @@ class StarlordsGame:
                 for coll_type, normal_vector, player_index, brick_index in debounced_collisions:
                     if coll_type == BallColliderType.WALL:
                         self._ball_bounce_since_last_render = True
-                        self._state.ball_min_speed = min(self._state.ball_min_speed * 1.05, self.BALL_MAX_SPEED)
+                        self._state.ball_min_speed = min(self._state.ball_min_speed * 1.07, self.BALL_MAX_SPEED)
                     elif coll_type == BallColliderType.CASTLE_BRICK:
                         brick_pos = self._state.castle_bricks[player_index][brick_index]
                         brick_removals.add((player_index, brick_index))
@@ -408,7 +408,7 @@ class StarlordsGame:
                             self._state.ball_captured_by = player_index
                             self._state.ball_capture_speed = current_speed
                         else:
-                            self._state.ball_min_speed = min(self._state.ball_min_speed * 1.05, self.BALL_MAX_SPEED)
+                            self._state.ball_min_speed = min(self._state.ball_min_speed * 1.07, self.BALL_MAX_SPEED)
                             self._ball_bounce_since_last_render = True
                     elif coll_type == BallColliderType.POWER_CORE:
                         self._state.explosions.append((self._state.power_core_positions[player_index] + StarlordsGame.POWER_CORE_SIZE / 2, 1.0, 100.0))
@@ -430,13 +430,13 @@ class StarlordsGame:
                 # if normal_length > 0.0:
                 #     avg_normal_vector = avg_normal_vector / avg_normal_vector.length()
 
-                for coll_type, normal_vector, player_index, brick_index in filtered_collisions:
-                    collider_velocity = shield_velocities[player_index] if coll_type == BallColliderType.SHIELD else v2(0.0, 0.0)
-                    elasticity = 0.2 if coll_type == BallColliderType.SHIELD and (coll_type, player_index, brick_index) in debounced_collisions else 1.0
-                    dot_product = (self._state.ball_velocity - collider_velocity).dot(normal_vector)
-                    proj_velocity = dot_product * normal_vector
-                    reflected_proj_velocity = elasticity * abs(dot_product) * normal_vector
-                    self._state.ball_velocity = self._state.ball_velocity - proj_velocity + reflected_proj_velocity
+            for coll_type, normal_vector, player_index, brick_index in filtered_collisions:
+                collider_velocity = shield_velocities[player_index] if coll_type == BallColliderType.SHIELD else v2(0.0, 0.0)
+                elasticity = 0.2 if coll_type == BallColliderType.SHIELD and (coll_type, player_index, brick_index) in debounced_collisions else 1.0
+                dot_product = (self._state.ball_velocity - collider_velocity).dot(normal_vector)
+                proj_velocity = dot_product * normal_vector
+                reflected_proj_velocity = elasticity * abs(dot_product) * normal_vector
+                self._state.ball_velocity = self._state.ball_velocity - proj_velocity + reflected_proj_velocity
 
             current_speed = self._state.ball_velocity.length()
             if current_speed >= self.BALL_MAX_SPEED:
@@ -509,7 +509,10 @@ class StarlordsGame:
         # print(f'Position: {self._state.ball_position} Velocity: {self._state.ball_velocity}')
         if self._state.game_started and not self._state.game_complete:
             ball_draw_x, ball_draw_y = round(self._state.ball_position.x - StarlordsGame.BALL_SIZE / 2.0), round(self._state.ball_position.y - StarlordsGame.BALL_SIZE / 2.0)
-            display_buf[ball_draw_x][ball_draw_y] = _add_colors(display_buf[ball_draw_x][ball_draw_y], StarlordsGame.BALL_COLOR)
+            try:
+                display_buf[ball_draw_x][ball_draw_y] = _add_colors(display_buf[ball_draw_x][ball_draw_y], StarlordsGame.BALL_COLOR)
+            except IndexError:
+                pass
         
         for y in range(self._display.height):
             for x in range(self._display.width):

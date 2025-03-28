@@ -9,13 +9,16 @@ PinType = type(board.D0)
 
 
 class NeopixelDisplay(Display):
-    def __init__(self, pin: PinType, height: int, width: int, bpp: int = 3, pixel_order: Optional[str] = None):
+    def __init__(self, pin: PinType, height: int, width: int, bpp: int = 3, extra_pixels_end: int = 0, pixel_order: Optional[str] = None):
         super().__init__(height, width)
         self.bpp = bpp
         try:
-            self._leds = neopixel.NeoPixel(pin, height * width, bpp=bpp, pixel_order=pixel_order, auto_write=False)
+            self._leds = neopixel.NeoPixel(pin, height * width + extra_pixels_end, bpp=bpp, pixel_order=pixel_order, auto_write=False)
         except TypeError:
-            self._leds = neopixel.NeoPixel(pin, height * width, bpp=bpp, pixel_order=pixel_order)
+            self._leds = neopixel.NeoPixel(pin, height * width + extra_pixels_end, bpp=bpp, pixel_order=pixel_order)
+
+        for i in range(height * width, height * width + extra_pixels_end):
+            self._leds[i] = ((0,) * bpp)
 
     def __setitem__(self, indices, value):
         x, y = indices

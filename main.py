@@ -2,6 +2,7 @@ import time
 
 import config
 from hardware import sound
+from hardware.admin_interface.admin_interface import AdminInterfaceCommand
 import starlords
 
 sleep = time.sleep_us if hasattr(time, 'sleep_us') else lambda us: time.sleep(us / 1e6)
@@ -20,7 +21,8 @@ elif config.DISPLAY_MODE == config.DisplayMode.NEOPIXEL:
     import board
     from hardware.display.neopixel_display import NeopixelDisplay
     Pin = board.pin.Pin
-    game_disp = NeopixelDisplay(Pin(config.LED_BIGPIXEL_PIN), config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1], config.DISPLAY_NEOPIXEL_BPP, config.DISPLAY_NEOPIXEL_PIXEL_ORDER)
+    game_disp = NeopixelDisplay(Pin(config.LED_BIGPIXEL_PIN), config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1], config.DISPLAY_NEOPIXEL_BPP,
+                                extra_pixels_end=config.DISPLAY_NEOPIXEL_EXTRA_PIXELS_END, pixel_order=config.DISPLAY_NEOPIXEL_PIXEL_ORDER)
 elif config.DISPLAY_MODE == config.DisplayMode.ARTNET:
     import pyartnet
     from hardware.display.artnet_display import ArtNetDisplay
@@ -29,6 +31,17 @@ elif config.DISPLAY_MODE == config.DisplayMode.ARTNET:
     game_disp = ArtNetDisplay(artnet_node, config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1])
 else:
     raise RuntimeError('Invalid DISPLAY_MODE setting.')
+
+game_admin_interface = None
+if config.DISPLAY_MODE == config.DisplayMode.GUI:
+    from hardware.admin_interface.gui_admin_interface import GUIAdminInterface
+    game_admin_interface = GUIAdminInterface(root_window)
+else:
+    try:
+        from hardware.admin_interface.hardware_keyboard_admin_interface import HWKeyboardAdminInterface
+        game_admin_interface = HWKeyboardAdminInterface()
+    except BaseException:
+        print('WARNING: Admin interface not available')
 
 if config.SIMULATE_PLAYER_STATIONS:
     if config.DISPLAY_MODE == config.DisplayMode.GUI:
@@ -54,45 +67,56 @@ sample_player = sound.SamplePlayer()
 game = starlords.StarlordsGame(game_disp, [p1_station, p2_station, p3_station, p4_station], sample_player)
 
 cancel_game_loop = False
-def game_loop():
-    target_ticks = 1000000000 / config.TARGET_FRAME_RATE
-    frame = 0
+frame = 0
+game_completed_time = None
+
+def process_frame():
+    global frame, game_completed_time
     ticks = time.time_ns()
-    game_completed_time = None
+    target_ticks = 1000000000 / config.TARGET_FRAME_RATE
 
-    while not cancel_game_loop:
-        frame_time = target_ticks / 1.0e9
-        while frame_time > 0.0:
-            frame_time -= game.update(frame_time)
+    if game_admin_interface is not None:
+        for command in game_admin_interface.get_commands():
+            if command == AdminInterfaceCommand.RESTART_GAME:
+                game.reset_game()
+                game_completed_time = None
+            elif command == AdminInterfaceCommand.BRIGHTNESS_UP:
+                game_disp.brightness = min(game_disp.brightness + 0.01, 1.0)
+            elif command == AdminInterfaceCommand.BRIGHTNESS_DOWN:
+                game_disp.brightness = max(game_disp.brightness - 0.01, 0.0)
 
-        if game_completed_time is None and game.game_complete:
-            game_completed_time = ticks
+    frame_time = target_ticks / 1.0e9
+    while frame_time > 0.0:
+        frame_time -= game.update(frame_time)
 
-        if game_completed_time is not None and (ticks - game_completed_time) >= config.GAME_COMPLETE_PAUSE * 1.0e9:
-            game.reset_game()
-            game_completed_time = None
-        # print(f'Frame {frame}:')
-        game.render()
-        # print()
+    if game_completed_time is None and game.game_complete:
+        game_completed_time = ticks
 
-        frame_ticks = time.time_ns() - ticks
+    if game_completed_time is not None and (ticks - game_completed_time) >= config.GAME_COMPLETE_PAUSE * 1.0e9:
+        game.reset_game()
+        game_completed_time = None
+    # print(f'Frame {frame}:')
+    game.render()
+    # print()
+
+    frame_ticks = time.time_ns() - ticks
+    frame += 1
+    if config.DISPLAY_MODE == config.DisplayMode.GUI:
+        if frame_ticks > target_ticks:
+            print(f'WARNING: Below target frame rate (frame took {frame_ticks} ns).')
+            root_window.after(0, process_frame)
+        else:
+            root_window.after(int((target_ticks - frame_ticks) // 1000000), process_frame)
+    else:
         if frame_ticks > target_ticks:
             print(f'WARNING: Below target frame rate (frame took {frame_ticks} ns).')
         else:
             sleep((target_ticks - frame_ticks) // 1000)
 
-        frame += 1
-        ticks = time.time_ns()
-
 
 if config.DISPLAY_MODE == config.DisplayMode.GUI:
-    import threading
-    game_thread = threading.Thread(target=game_loop)
-    game_thread.start()
-
-    try:
-        root_window.mainloop()
-    finally:
-        cancel_game_loop = True
+    root_window.after(0, process_frame)
+    root_window.mainloop()
 else:
-    game_loop()
+    while True:
+        process_frame()
