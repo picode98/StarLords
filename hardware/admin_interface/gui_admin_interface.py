@@ -11,6 +11,8 @@ class GUIAdminInterface(AdminInterface):
         display_gui.bind('r', lambda evt: self._event_queue.put_nowait(AdminInterfaceCommand.RESTART_GAME), add=True)
         display_gui.bind('w', lambda evt: self._event_queue.put_nowait(AdminInterfaceCommand.BRIGHTNESS_UP), add=True)
         display_gui.bind('s', lambda evt: self._event_queue.put_nowait(AdminInterfaceCommand.BRIGHTNESS_DOWN), add=True)
+        display_gui.bind('i', lambda evt: self._event_queue.put_nowait(AdminInterfaceCommand.GAME_SPEED_UP), add=True)
+        display_gui.bind('k', lambda evt: self._event_queue.put_nowait(AdminInterfaceCommand.GAME_SPEED_DOWN), add=True)
 
     def get_commands(self) -> Iterable[AdminInterfaceCommand]:
         try:

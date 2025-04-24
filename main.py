@@ -22,7 +22,10 @@ elif config.DISPLAY_MODE == config.DisplayMode.NEOPIXEL:
     from hardware.display.neopixel_display import NeopixelDisplay
     Pin = board.pin.Pin
     game_disp = NeopixelDisplay(Pin(config.LED_BIGPIXEL_PIN), config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1], config.DISPLAY_NEOPIXEL_BPP,
-                                extra_pixels_end=config.DISPLAY_NEOPIXEL_EXTRA_PIXELS_END, pixel_order=config.DISPLAY_NEOPIXEL_PIXEL_ORDER)
+                                serpentine_block_width=config.DISPLAY_NEOPIXEL_SERPENTINE_BLOCK_WIDTH,
+                                serpentine_block_height=config.DISPLAY_NEOPIXEL_SERPENTINE_BLOCK_HEIGHT,
+                                extra_pixels_end=config.DISPLAY_NEOPIXEL_EXTRA_PIXELS_END,
+                                pixel_order=config.DISPLAY_NEOPIXEL_PIXEL_ORDER)
 elif config.DISPLAY_MODE == config.DisplayMode.ARTNET:
     import pyartnet
     from hardware.display.artnet_display import ArtNetDisplay
@@ -70,8 +73,10 @@ cancel_game_loop = False
 frame = 0
 game_completed_time = None
 
+game_speed_count = 0
+
 def process_frame():
-    global frame, game_completed_time
+    global frame, game_completed_time, game_speed_count
     ticks = time.time_ns()
     target_ticks = 1000000000 / config.TARGET_FRAME_RATE
 
@@ -84,6 +89,10 @@ def process_frame():
                 game_disp.brightness = min(game_disp.brightness + 0.01, 1.0)
             elif command == AdminInterfaceCommand.BRIGHTNESS_DOWN:
                 game_disp.brightness = max(game_disp.brightness - 0.01, 0.0)
+            elif command == AdminInterfaceCommand.GAME_SPEED_UP or command == AdminInterfaceCommand.GAME_SPEED_DOWN:
+                game_speed_count = min(game_speed_count + 1, 20) if command == AdminInterfaceCommand.GAME_SPEED_UP else max(game_speed_count - 1, -20)
+                game.ball_bounce_multiplier = starlords.StarlordsGame.BALL_BOUNCE_MULTIPLIER + 0.01 * game_speed_count
+                game.ball_max_speed = max(starlords.StarlordsGame.BALL_MAX_SPEED + 4.0 * game_speed_count, 8.0)
 
     frame_time = target_ticks / 1.0e9
     while frame_time > 0.0:
