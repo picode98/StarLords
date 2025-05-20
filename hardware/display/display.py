@@ -9,3 +9,6 @@ class Display:
 
     def write(self):
         raise NotImplementedError()
+
+    def hardware_test(self):
+        pass

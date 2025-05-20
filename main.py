@@ -93,6 +93,8 @@ def process_frame():
                 game_speed_count = min(game_speed_count + 1, 20) if command == AdminInterfaceCommand.GAME_SPEED_UP else max(game_speed_count - 1, -20)
                 game.ball_bounce_multiplier = starlords.StarlordsGame.BALL_BOUNCE_MULTIPLIER + 0.01 * game_speed_count
                 game.ball_max_speed = max(starlords.StarlordsGame.BALL_MAX_SPEED + 4.0 * game_speed_count, 8.0)
+            elif command == AdminInterfaceCommand.HARDWARE_TEST:
+                game_disp.hardware_test()
 
     frame_time = target_ticks / 1.0e9
     while frame_time > 0.0:

@@ -9,6 +9,9 @@ EV_KEY = 1
 KEY_R = 19
 KEY_S = 31
 KEY_W = 17
+KEY_I = 23
+KEY_K = 37
+KEY_T = 20
 
 
 _HW_KBD_FORMAT = struct.Struct('llHHI')
@@ -30,3 +33,9 @@ class HWKeyboardAdminInterface(AdminInterface):
                         yield AdminInterfaceCommand.BRIGHTNESS_DOWN
                     elif event_code == KEY_W:
                         yield AdminInterfaceCommand.BRIGHTNESS_UP
+                    elif event_code == KEY_I:
+                        yield AdminInterfaceCommand.GAME_SPEED_UP
+                    elif event_code == KEY_K:
+                        yield AdminInterfaceCommand.GAME_SPEED_DOWN
+                    elif event_code == KEY_T:
+                        yield AdminInterfaceCommand.HARDWARE_TEST
