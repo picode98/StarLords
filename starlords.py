@@ -227,8 +227,6 @@ COUNTDOWN_DIGITS = [[[char != ' ' for char in line] for line in digit.strip('\n'
 
 
 class StarlordsGame:
-    INVERT_DISPLAY_X = False
-    INVERT_DISPLAY_Y = True
     BALL_COLOR = (255, 0, 0)
     BRICK_COLOR = (0, 0, 255)
     SHIELD_COLOR = (0, 255, 0)
@@ -522,7 +520,7 @@ class StarlordsGame:
         
         for y in range(self._display.height):
             for x in range(self._display.width):
-                self._display[x, y] = display_buf[(self._display.width - 1) - x if self.INVERT_DISPLAY_X else x][(self._display.height - 1) - y if self.INVERT_DISPLAY_Y else y]
+                self._display[x, y] = display_buf[(self._display.width - 1) - x if self.invert_display_x else x][(self._display.height - 1) - y if self.invert_display_y else y]
         self._display.write()
 
         if not self._state.game_started:
@@ -542,11 +540,13 @@ class StarlordsGame:
 #            player_station.write_ring_light()
 
         if self._brick_bounce_since_last_render:
-            self._sample_player.play_sample(GameSample.BREAK, cancel_existing=True)
-        elif self._ball_bounce_since_last_render:
-            self._sample_player.play_sample(GameSample.BOUNCE, cancel_existing=True)
-        elif self._player_eliminated_since_last_render:
-            self._sample_player.play_sample(GameSample.PLAYER_DEATH, cancel_existing=True)
+            self._sample_player.play_sample(GameSample.BREAK, playback_start_time=0.0)
+
+        if self._ball_bounce_since_last_render:
+            self._sample_player.play_sample(GameSample.BOUNCE, playback_start_time=0.0)
+
+        if self._player_eliminated_since_last_render:
+            self._sample_player.play_sample(GameSample.PLAYER_DEATH, playback_start_time=0.0)
 
             if len(self._state.active_players) == 1:
                 self._sample_player.play_sample(GameSample.PLAYER_WIN)
@@ -554,14 +554,17 @@ class StarlordsGame:
         for i, player_index in enumerate(self._ready_players_since_last_render):
             sample = [GameSample.READY_PLAYER_ONE, GameSample.READY_PLAYER_TWO, GameSample.READY_PLAYER_THREE,
                       GameSample.READY_PLAYER_FOUR][player_index]
-            self._sample_player.play_sample(sample, cancel_existing=(i == 0 and len(self._state.ready_players) - len(self._ready_players_since_last_render) == 0)
-                                            or (i == len(self._ready_players_since_last_render) - 1 and len(self._state.ready_players) == len(self._player_stations)))
+            if (i == 0 and len(self._state.ready_players) - len(self._ready_players_since_last_render) == 0) \
+               or (i == len(self._ready_players_since_last_render) - 1 and len(self._state.ready_players) == len(self._player_stations)):
+                self._sample_player.clear_samples()
+
+            self._sample_player.play_sample(sample)
 
         if len(self._ready_players_since_last_render) > 0 and len(self._state.ready_players) == len(self._player_stations):
             self._sample_player.play_sample(GameSample.GAME_START)
         elif len(self._state.ready_players) == 0 and self._new_game_since_last_render:
-            self._sample_player.play_sample(GameSample.IDLE_LOOP, cancel_existing=True)
-            self._sample_player.loop = True
+            self._sample_player.clear_samples()
+            self._sample_player.play_sample(GameSample.IDLE_LOOP, loop=True)
 
         self._new_game_since_last_render = False
         self._ball_bounce_since_last_render = False

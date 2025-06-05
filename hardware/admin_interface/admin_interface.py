@@ -9,6 +9,8 @@ class AdminInterfaceCommand(enum.Enum):
     GAME_SPEED_UP = 'game_speed_up'
     GAME_SPEED_DOWN = 'game_speed_down'
     HARDWARE_TEST = 'hardware_test'
+    INVERT_DISPLAY_X = 'invert_display_x'
+    INVERT_DISPLAY_Y = 'invert_display_y'
 
 
 class AdminInterface:

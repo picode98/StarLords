@@ -7,6 +7,11 @@ import starlords
 
 sleep = time.sleep_us if hasattr(time, 'sleep_us') else lambda us: time.sleep(us / 1e6)
 
+display_pixel_map = None
+if config.DISPLAY_ENABLE_SERPENTINE:
+    from hardware.display.display import get_serpentine_index
+    display_pixel_map = lambda x, y: get_serpentine_index(x, y, config.DISPLAY_SIZE[1], config.DISPLAY_SERPENTINE_BLOCK_WIDTH, config.DISPLAY_SERPENTINE_BLOCK_HEIGHT)
+
 root_window = None
 if config.DISPLAY_MODE == config.DisplayMode.PRINT:
     from hardware.display import print_display
@@ -21,17 +26,18 @@ elif config.DISPLAY_MODE == config.DisplayMode.NEOPIXEL:
     import board
     from hardware.display.neopixel_display import NeopixelDisplay
     Pin = board.pin.Pin
-    game_disp = NeopixelDisplay(Pin(config.LED_BIGPIXEL_PIN), config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1], config.DISPLAY_NEOPIXEL_BPP,
-                                serpentine_block_width=config.DISPLAY_NEOPIXEL_SERPENTINE_BLOCK_WIDTH,
-                                serpentine_block_height=config.DISPLAY_NEOPIXEL_SERPENTINE_BLOCK_HEIGHT,
-                                extra_pixels_end=config.DISPLAY_NEOPIXEL_EXTRA_PIXELS_END,
-                                pixel_order=config.DISPLAY_NEOPIXEL_PIXEL_ORDER)
+    game_disp = NeopixelDisplay(Pin(config.LED_BIGPIXEL_PIN), config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1], config.DISPLAY_BPP,
+                                pixel_mapping=display_pixel_map,
+                                extra_pixels_end=config.DISPLAY_EXTRA_PIXELS_END,
+                                pixel_order=config.DISPLAY_PIXEL_ORDER)
 elif config.DISPLAY_MODE == config.DisplayMode.ARTNET:
     import pyartnet
     from hardware.display.artnet_display import ArtNetDisplay
     artnet_node = pyartnet.ArtNetNode(config.ARTNET_IP, config.ARTNET_PORT, max_fps=config.TARGET_FRAME_RATE, start_refresh_task=False)
 
-    game_disp = ArtNetDisplay(artnet_node, config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1])
+    game_disp = ArtNetDisplay(artnet_node, config.DISPLAY_SIZE[0], config.DISPLAY_SIZE[1], config.DISPLAY_BPP,
+                              pixel_mapping=display_pixel_map,
+                              extra_pixels_end=config.DISPLAY_EXTRA_PIXELS_END)
 else:
     raise RuntimeError('Invalid DISPLAY_MODE setting.')
 
@@ -95,6 +101,10 @@ def process_frame():
                 game.ball_max_speed = max(starlords.StarlordsGame.BALL_MAX_SPEED + 4.0 * game_speed_count, 8.0)
             elif command == AdminInterfaceCommand.HARDWARE_TEST:
                 game_disp.hardware_test()
+            elif command == AdminInterfaceCommand.INVERT_DISPLAY_X:
+                game.invert_display_x = not game.invert_display_x
+            elif command == AdminInterfaceCommand.INVERT_DISPLAY_Y:
+                game.invert_display_y = not game.invert_display_y
 
     frame_time = target_ticks / 1.0e9
     while frame_time > 0.0:
